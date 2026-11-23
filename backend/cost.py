@@ -42,6 +42,9 @@ DEFAULT_PRICES = [
     ("Cr", "Cr2O3", 4), ("Mo", "MoO3", 40), ("W", "WO3", 30), ("Mn", "MnO2", 3), ("Fe", "Fe2O3", 1.5), ("Co", "Co3O4", 45),
     ("Ni", "NiO", 25), ("Cu", "CuO", 10), ("Zn", "ZnO", 3), ("Al", "Al2O3", 2), ("Ga", "Ga2O3", 400), ("In", "In2O3", 400),
     ("Sn", "SnO2", 30), ("Pb", "PbO", 3), ("Bi", "Bi2O3", 20), ("Sb", "Sb2O3", 10),
+    ("Be", "BeO", 600), ("B", "B2O3", 3), ("Si", "SiO2", 2), ("Ge", "GeO2", 1500), ("Rb", "Rb2CO3", 1500), ("Cs", "Cs2CO3", 1000),
+    ("Eu", "Eu2O3", 40), ("Tb", "Tb4O7", 1000), ("Ho", "Ho2O3", 60), ("Tm", "Tm2O3", 500), ("Lu", "Lu2O3", 700),
+    ("Cd", "CdO", 15), ("Tl", "Tl2O3", 500), ("Se", "SeO2", 50), ("Te", "TeO2", 100), ("Re", "Re2O7", 1000),
     ("Ru", "RuO2", 9000), ("Ir", "IrO2", 130000), ("Rh", "Rh", 140000), ("Pd", "Pd", 30000), ("Pt", "Pt", 30000), ("Ag", "Ag", 900), ("Au", "Au", 120000),
 ]
 DEFAULT_ROWS = [{"element": el, "precursor": pre, "price_per_kg": str(pr), "purity_percent": "99", "pack_size_g": "500"} for el, pre, pr in DEFAULT_PRICES]
@@ -163,7 +166,7 @@ def _pack_g(v):
 
 
 class Entry:
-    __slots__ = ("row", "element", "precursor", "price_kg", "purity", "pack_g", "norm_kg", "molar_mass", "k", "per_mol", "source")
+    __slots__ = ("row", "element", "precursor", "purity", "pack_g", "norm_kg", "molar_mass", "k", "per_mol", "source")
 
 
 class PriceTable:
@@ -214,7 +217,7 @@ class PriceTable:
         purity = _num(str(r["purity_percent"]).replace("%", ""), "purity")
         if not (1 < purity <= 100): raise ValueError(f"purity must be a percentage between 1 and 100 (e.g. 99.5), got {r['purity_percent']}")
         pack = _pack_g(r["pack_size_g"])
-        e = Entry(); e.row, e.element, e.precursor, e.price_kg, e.purity, e.pack_g = i, el, pre, price, purity, pack
+        e = Entry(); e.row, e.element, e.precursor, e.purity, e.pack_g = i, el, pre, purity, pack
         e.source = "admin"
         e.norm_kg = price * REF_PURITY / purity
         e.molar_mass, e.k = molar_mass(comp), comp[el]
@@ -223,8 +226,8 @@ class PriceTable:
 
 
 # ------------------------------------------------------------------ csv io (storage folder)
-def parse_csv_text(text, strict=False):
-    """-> list of raw row dicts (only the five known columns). strict=True raises TableFileError when a column is missing."""
+def parse_csv_text(text):
+    """-> list of raw row dicts (only the five known columns)."""
     text = text.lstrip("\ufeff")
     rd = csv.reader(io.StringIO(text))
     try: head = next(rd)
@@ -357,14 +360,21 @@ def apply_single(x, table, pool):
 
 # ------------------------------------------------------------------ funnel + summary
 def funnel(rows):
-    """Sequential survivors: screened -> AD -> Ehull -> ORR -> final PASS. (Cost is an estimate shown beside the results, not a stage.)"""
+    """Sequential survivors. Batch screening: screened -> TEC -> log10(k*) -> Ehull -> final PASS (applicability domain and cost are information only).
+    Results made by the older dataset-training flow keep their old stages: AD -> Ehull -> ORR."""
     total = len(rows); cur = list(rows); out = [{"key": "screened", "label": "Cathodes screened", "rule": "", "entered": total, "passed": total, "failed": 0, "na": 0}]
-    for key, label, rule, f in (("ad", "Inside applicability domain", "Mahalanobis distance ≤ AD threshold", "ad_result"),
-                                ("ehull", "Stable (Ehull)", "Ehull ≤ 57 meV/atom", "ehull_result"),
-                                ("orr", "Active (ORR)", "predicted log10(k*) ≥ −6.40", "orr_result")):
+    if any(r.get("tec_result") for r in rows):
+        stages = (("tec", "Thermal expansion (TEC)", "predicted TEC ≤ 15 ×10⁻⁶ K⁻¹", "tec_result"),
+                  ("orr", "Active (log10 k*)", "predicted log10(k*) ≥ −6.40", "orr_result"),
+                  ("ehull", "Stable (Ehull)", "predicted Ehull ≤ 57 meV/atom", "ehull_result"))
+    else:
+        stages = (("ad", "Inside applicability domain", "Mahalanobis distance ≤ AD threshold", "ad_result"),
+                  ("ehull", "Stable (Ehull)", "Ehull ≤ 57 meV/atom", "ehull_result"),
+                  ("orr", "Active (ORR)", "predicted log10(k*) ≥ −6.40", "orr_result"))
+    for key, label, rule, f in stages:
         p = [r for r in cur if r[f] == "PASS"]; na = sum(1 for r in cur if r[f] == "NOT AVAILABLE")
         out.append({"key": key, "label": label, "rule": rule, "entered": len(cur), "passed": len(p), "failed": len(cur) - len(p) - na, "na": na}); cur = p
-    out.append({"key": "final", "label": "Final PASS", "rule": "passes every stage", "entered": len(cur), "passed": len(cur), "failed": 0, "na": 0})
+    out.append({"key": "final", "label": "Final PASS", "rule": "passes every filter", "entered": len(cur), "passed": len(cur), "failed": 0, "na": 0})
     return out
 
 

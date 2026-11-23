@@ -3,13 +3,17 @@ Dataset-based batch screening following *Deng et al., "Machine-Learning-Based Sc
 Stack (all free): Python · Flask · scikit-learn · SQLite · vanilla HTML/CSS/JS.
 
 ## Run locally (free)
-Windows: double-click `run.bat`  ·  Mac/Linux: `./run.sh`  → open http://localhost:5000
-Login: any valid roll number (e.g. `23CSE001`, 6–15 letters/digits) + the shared password. A user is created on first login.
+```
+pip install -r requirements.txt
+python backend/app.py
+```
+Then open http://localhost:5000
+Login: use **Create account** to register a username (3–30 letters/digits/`.`/`_`/`@`/`-`) and password; a taken username shows "Use another username". Then **Log in**: an unknown username shows "Account not found. Please create a new account", a wrong password shows "Incorrect password". Passwords are saved hashed, and the admin page lists every registered username.
 
 ## Free hosting
 * **PythonAnywhere (free)** – recommended: persistent disk, so SQLite DB, uploads and models survive. Upload the folder, create a Flask web app, point WSGI to `backend/wsgi.py`, `pip install -r requirements.txt`.
 * **Render free web service** – works (`Procfile` included) but its free disk is **ephemeral**: data is lost on redeploy/restart. Use only for demos.
-* Set `STORAGE_DIR` to change where `app.db`, `uploads/` and `models/` are kept; set `SECRET_KEY` / `APP_SHARED_PASSWORD` env vars for deployment.
+* Set `STORAGE_DIR` to change where `app.db`, `uploads/` and `models/` are kept; set `SECRET_KEY` env vars for deployment.
 
 ## What it does
 Upload CSV/XLSX → auto column detection (editable) → all usable descriptors from the paper's list, basic + enhanced + 1000/T (unavailable ones are dropped, never invented; no feature selection) →
@@ -30,22 +34,34 @@ In `~/.perovskite_screening` (Windows: `C:\Users\<you>\.perovskite_screening`), 
 * Column abbreviations (`Sa`, `Ionic`, `Ion`) follow the paper's Fig. 3 labels. Shapley values use a built-in Monte-Carlo estimator, not the `shap` package.
 * Shared-password login (stored hashed, 7-day tokens, no rate limiting) – fine for a college project, not for the open internet.
 
-## ANN option (PyTorch) – added
-* **Model Training** page → *Model* dropdown: **SVR** (all descriptors) or **ANN (PyTorch)**. Both are stored side by side; choosing one never replaces the other.
-* ANN: `Linear→ReLU` network (`TorchANN` in `backend/ml.py`), AdamW + cosine LR, MSE loss, **all features, no feature selection**, same grouped 60:40 split as the SVR, hyper-parameters (hidden layers, weight decay) tuned with grouped 3-fold CV (80 epochs; Shapley on a 300-row sample). Median imputer + StandardScaler sit in the same sklearn Pipeline, so AD, Shapley, screening and predictions use the same code as the SVR.
-* Page flow: train SVR on *ML Training* as before → *Model Training* → choose **ANN** → *Train ANN* → *Screen using ANN* (or *Train using SVR* for the SVR). The Screening Results page shows which model produced the results.
-* **Predict Cathode** page has a *Prediction model* dropdown (SVR and ANN both use all descriptor inputs).
-* Needs `pip install torch` (listed in `requirements.txt`). Without it the SVR still works and the ANN button shows a clear message.
+## Best in category
 * **Best in category** (results page + export): among the PASS cathodes only, the most stable (lowest Ehull), lowest estimated cost, most active (highest predicted log10(k*)) and most balanced (lowest rank-sum of the three ranks). Ties are listed, and a category whose criterion is missing is skipped with a note. Only values already in the results are used.
 
-## Built-in SVR + ANN (no upload / training for first-time users)
-The **Predict Single Cathode** page works immediately for every new user: pick **SVR** or **ANN** and predict. The two models are trained once on your dataset and shipped *inside the code folder* (`backend/builtin_models/`), so they survive re-deploys (also on Render's ephemeral disk).
-To create / refresh them (run once on your computer, then zip or deploy the whole folder):
+## Built-in SVR (no upload / training for first-time users)
+The **Predict Single Cathode** page works immediately for every new user: just predict. The SVR is trained once on your dataset and shipped *inside the code folder* (`backend/builtin_models/`), so it survives re-deploys (also on Render's ephemeral disk).
+To create / refresh it (run once on your computer, then zip or deploy the whole folder):
 ```
 pip install -r requirements.txt
 cd backend
 python build_builtin_models.py path/to/your_dataset.xlsx
 ```
-This writes `svr_pipeline.joblib`, `ann_pipeline.joblib` and `meta.json` to `backend/builtin_models/`. Both models use the same full descriptor set (basic + enhanced + 1000/T). Keep the library versions in `requirements.txt` the same on the server as on the machine that built the models (joblib files are version-sensitive).
+This writes `svr_pipeline.joblib` and `meta.json` to `backend/builtin_models/`. The model uses the full descriptor set (basic + enhanced + 1000/T). Keep the library versions in `requirements.txt` the same on the server as on the machine that built the model (joblib files are version-sensitive).
 
-**Status:** `backend/builtin_models/` already contains the SVR trained on `Kstar_Combined.xlsx` (386 rows, 23 descriptors). To add the ANN, install PyTorch and run `python build_builtin_models.py Kstar_Combined.xlsx --ann-only` (the SVR files are kept). Until then the ANN button on the Predict page is greyed out.
+**Status:** `backend/builtin_models/` contains the SVR trained on `Kstar_Combined_Updated_1.xlsx` (386 rows, 23 descriptors; test R² 0.72, CV R² 0.71).
+
+**Predict using SVR (other features).** `python build_property_models.py path/to/dataset.xlsx` trains one SVR per extra feature (band gap, O-vacancy energy, work function, log dielectric, O p-band centre from the 15 formula descriptors; Ehull and TEC from the 15 descriptors + those 5 properties; bulk ionic conductivity, total electronic conductivity and ASR as log10 from the descriptors + 1000/T) and saves `props.joblib` + `props_meta.json`. Scores are grouped cross-validated R².
+
+
+## Predict single cathode: how the verdict is made
+All 23 model inputs are used: the 15 formula descriptors, the 5 material properties, 1000/T (from the temperature in °C) and Ehull + TEC, which are predicted by SVR first. PASS needs all three: TEC ≤ 15 ×10⁻⁶ K⁻¹ (user-set; the paper has no TEC limit), Ehull ≤ 57 meV/atom and log10(k*) ≥ −6.40 (paper limits). Applicability domain (Mahalanobis) and the cost estimate are shown for information and do not affect PASS / FAIL on this page.
+
+
+## Dataset screening (new): temperature + Screen, same logic as Predict Single Cathode
+On the **Upload Dataset** tab choose a CSV/XLSX of cathode formulas, type the operating **temperature (°C)** and press **Screen**. Nothing is trained: every cathode goes through the Predict-page pipeline with the built-in models (`backend/screening.py`):
+1. formula recognised (A-site / B-site / oxygen, same checks as the page - `backend/formula_desc.py` is a port of `formula.js` + `descriptors.js`, cross-checked against the JS);
+2. the 15 descriptors: the dataset's own column if it has one, otherwise **calculated from the formula**;
+3. 1000/T from the temperature box;
+4. the 5 properties (Gap, O-vacancy energy, work function, log dielectric, O p-band): dataset column if present, otherwise **predicted by SVR**;
+5. **Ehull and TEC predicted** by SVR, then **log10(k\*) predicted** by the built-in SVR from all 23 inputs.
+**Funnel / PASS filters (only these three):** TEC <= 15 x1e-6 1/K -> log10(k*) >= -6.40 -> Ehull <= 57 meV/atom. Applicability domain and cost are shown for information only. A cathode whose formula is not recognised, or whose element has no descriptor data and no dataset column, is listed as NOT EVALUABLE with the reason (never guessed). Results are identical to the Predict page for the same formula and temperature.
+Older datasets screened with the previous train-on-upload flow still open normally.

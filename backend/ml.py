@@ -3,12 +3,12 @@ Mahalanobis applicability domain, Shapley explanations and paper-based screening
 Nothing here invents data: missing descriptors / screening columns are reported, never filled."""
 import os, re, warnings, contextlib, threading
 import numpy as np, pandas as pd
-from sklearn.base import clone, BaseEstimator, RegressorMixin
+from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.svm import SVR
-from sklearn.model_selection import GroupKFold, GroupShuffleSplit, GridSearchCV, ParameterGrid
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit, GridSearchCV
 from sklearn.metrics import r2_score, mean_absolute_error
 
 warnings.filterwarnings("ignore")
@@ -21,6 +21,7 @@ def say(msg, detail=""):
         except Exception: pass
 
 EHULL_LIMIT = 57.0      # meV/atom, LSC value used in the paper
+TEC_LIMIT = 15.0        # x1e-6 1/K: thermal-expansion criterion (set by the user for the Predict page)
 ORR_LIMIT = -6.40       # log10(k*) of LSC, "LSC benchmark used in the research paper"
 AD_QUANTILE = 0.8       # paper: empirical quantile threshold 0.8
 
@@ -65,17 +66,27 @@ def load_df(raw):
     info = {"raw_rows": len(raw), "invalid": {}, "empty_dropped": 0, "dup_dropped": 0}
     df = raw.copy()
     df.columns = [str(c).strip() for c in df.columns]
-    df = df.dropna(how="all")
+    # ---- automatic clean-up of whatever file the user uploads (no manual editing needed) ----
+    junk = {"", "-", "--", "—", "na", "n/a", "nan", "none", "null", "nil", "#n/a"}
+    for c in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c]):                                    # trim spaces / non-breaking spaces, blank-like text -> empty
+            df[c] = df[c].map(lambda v: (lambda t: np.nan if t.lower() in junk else t)(re.sub(r"\s+", " ", v.replace("\u00a0", " ")).strip()) if isinstance(v, str) else v)
+    df = df.dropna(axis=1, how="all")                                # empty / 'Unnamed' columns
+    df = df.dropna(how="all")                                        # empty rows
     info["empty_dropped"] = info["raw_rows"] - len(df)
     for c in df.columns:
-        if df[c].dtype == object:
+        if not pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c]):
             num = pd.to_numeric(df[c], errors="coerce")
             if num.notna().sum() >= 0.5 * df[c].notna().sum() and num.notna().sum() > 0:
                 bad = int((df[c].notna() & num.isna()).sum())
                 if bad: info["invalid"][c] = bad
                 df[c] = num
-    info["dup_dropped"] = int(df.duplicated().sum())
-    df = df.drop_duplicates().reset_index(drop=True)
+    key = df.copy()                                                  # exact-same rows: compared after trimming + rounding float noise
+    for c in key.columns:
+        if pd.api.types.is_numeric_dtype(key[c]): key[c] = key[c].round(9)
+    dup = key.duplicated(keep="first")
+    info["dup_dropped"] = int(dup.sum())
+    df = df[~dup.to_numpy()].reset_index(drop=True)
     return df, info
 
 
@@ -182,7 +193,7 @@ def _pmap(fn, items):
 
 
 def _search(name, est, grid, kind, cv):
-    """Grouped-CV grid search (used by the ANN and as a slow-path fallback for the SVR). cv is a GroupKFold; the composition groups are passed to fit() so folds never split a composition."""
+    """Grouped-CV grid search (slow-path fallback for the SVR). cv is a GroupKFold; the composition groups are passed to fit() so folds never split a composition."""
     p = pipe(est); X, y, g = _search.data
     s = GridSearchCV(p, grid, cv=cv, scoring=SCORING, refit="r2")
     s.fit(X, y, groups=g); return s, "GridSearchCV"
@@ -394,145 +405,13 @@ def train_all(df, mp, cols_primary, label_map, q=AD_QUANTILE):
     return result, bundle
 
 
-# ======================================================================================================
-#  ANN (PyTorch) - an ALTERNATIVE to the SVR. Nothing above was changed.
-#  * uses ALL candidate descriptors - no feature selection
-#  * same grouped 60:40 split (same seed) and the same grouped 5-fold CV as the SVR, so the scores are comparable
-#  * median imputer + StandardScaler live in the same sklearn Pipeline, so screening / Mahalanobis AD / Shapley /
-#    single-cathode prediction work for the ANN with exactly the same code as for the SVR
-# ======================================================================================================
-ANN_EPOCHS = 80
-ANN_FOLDS = 3            # grouped CV folds for tuning the ANN (SVR keeps N_FOLDS)
-ANN_BATCH = 128
-ANN_GRID = {"m__hidden": [(64, 32), (128, 64, 32)], "m__weight_decay": [1e-4, 1e-2]}
-ANN_GRID_SMALL = {"m__hidden": [(64, 32)], "m__weight_decay": [1e-4, 1e-2]}
-
-
-def torch_available():
-    try:
-        import torch  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-class TorchANN(BaseEstimator, RegressorMixin):
-    """Feed-forward regression network (Linear -> ReLU [-> Dropout] ... -> Linear) trained with AdamW + cosine LR schedule and MSE loss.
-    sklearn-compatible (fit / predict / get_params), so it can sit at the end of a Pipeline and be cloned / grid-searched / pickled.
-    The target is standardised internally; predict() returns values in the original log10(k*) units."""
-    def __init__(self, hidden=(64, 32), lr=2e-3, weight_decay=1e-4, dropout=0.0, epochs=ANN_EPOCHS, batch_size=ANN_BATCH, seed=42):
-        self.hidden, self.lr, self.weight_decay, self.dropout = hidden, lr, weight_decay, dropout
-        self.epochs, self.batch_size, self.seed = epochs, batch_size, seed
-
-    def _build(self, d):
-        import torch.nn as nn
-        layers, prev = [], d
-        for h in self.hidden:
-            layers += [nn.Linear(prev, int(h)), nn.ReLU()]
-            if self.dropout > 0: layers.append(nn.Dropout(self.dropout))
-            prev = int(h)
-        layers.append(nn.Linear(prev, 1))
-        return nn.Sequential(*layers)
-
-    def fit(self, X, y):
-        import torch
-        torch.set_num_threads(max(1, min(4, N_JOBS)))
-        X = np.asarray(X, dtype=np.float32); y = np.asarray(y, dtype=np.float32).ravel()
-        torch.manual_seed(self.seed); rng = np.random.default_rng(self.seed)
-        self.in_dim_ = X.shape[1]; self.y_mu_ = float(y.mean()); self.y_sd_ = float(y.std()) or 1.0
-        Xt = torch.from_numpy(X); yt = torch.from_numpy((y - self.y_mu_) / self.y_sd_).unsqueeze(1)
-        net = self._build(self.in_dim_)
-        opt = torch.optim.AdamW(net.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, int(self.epochs)))
-        lossf = torch.nn.MSELoss(); n = len(Xt); bs = int(min(self.batch_size, n)); hist = []
-        for _ in range(int(self.epochs)):
-            net.train(); perm = torch.from_numpy(rng.permutation(n)); tot = 0.0
-            for a in range(0, n, bs):
-                idx = perm[a:a + bs]
-                if len(idx) < 2: continue                     # (Dropout/BatchNorm-safe) skip a 1-row remainder
-                opt.zero_grad(); loss = lossf(net(Xt[idx]), yt[idx]); loss.backward(); opt.step(); tot += float(loss) * len(idx)
-            sched.step(); hist.append(tot / n)
-        net.eval(); self._net = net
-        self.state_ = {k: v.detach().cpu().numpy().copy() for k, v in net.state_dict().items()}      # numpy copy -> safe to pickle with joblib
-        self.loss_history_ = hist
-        return self
-
-    def predict(self, X):
-        import torch
-        if getattr(self, "_net", None) is None:                # re-built after loading from disk
-            net = self._build(self.in_dim_); net.load_state_dict({k: torch.from_numpy(v) for k, v in self.state_.items()}); net.eval(); self._net = net
-        X = np.asarray(X, dtype=np.float32); out = []
-        with torch.no_grad():
-            for a in range(0, len(X), 65536): out.append(self._net(torch.from_numpy(X[a:a + 65536])).squeeze(1).numpy())
-        return np.concatenate(out).astype(float) * self.y_sd_ + self.y_mu_
-
-    def __getstate__(self):
-        d = super().__getstate__(); d.pop("_net", None); return d
-
-
-def train_ann(df, mp, cols_primary, label_map, q=AD_QUANTILE):
-    """Train the ANN on ALL candidate descriptors (no feature selection). Returns (result, bundle) in the same format as train_all()."""
-    if not torch_available(): raise ValueError("PyTorch is not installed on the server. Run:  pip install torch   (then restart the app).")
-    y_all = target_series(df, mp); keep_rows = y_all.notna()
-    if keep_rows.sum() < 20: raise ValueError(f"Only {int(keep_rows.sum())} rows have a valid target – at least 20 are needed for a grouped 60:40 split with cross-validation.")
-    d = df[keep_rows]; y = y_all[keep_rows].values
-    feats = [c for c in cols_primary if pd.api.types.is_numeric_dtype(d[c])]          # ALL features - nothing is eliminated
-    Xall = d[feats]; fcol = mp.get("formula")
-    groups = d[fcol].astype(str).values if fcol in d.columns else np.arange(len(d)); n_groups = int(len(set(groups)))
-    if n_groups < 8: raise ValueError(f"Only {n_groups} distinct compositions – at least 8 are needed for a grouped 60:40 split with 5-fold grouped CV.")
-    tr_i, te_i = next(GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=SPLIT_SEED).split(Xall, y, groups))   # identical to the SVR split
-    tr_i, te_i = np.sort(tr_i), np.sort(te_i)
-    if len(set(groups[tr_i])) < N_FOLDS: raise ValueError(f"Only {len(set(groups[tr_i]))} compositions fall in the training part – at least {N_FOLDS} are needed for grouped 5-fold CV.")
-    X_tr, X_te, y_tr, y_te, g_tr = Xall.iloc[tr_i], Xall.iloc[te_i], y[tr_i], y[te_i], groups[tr_i]
-    say("Features prepared", f"{len(feats)} descriptors used (all of them)")
-    say("Grouped 60:40 split by composition", f"{len(tr_i)} training rows · {len(te_i)} test rows · {n_groups} compositions")
-    gkf = GroupKFold(ANN_FOLDS); big = len(X_tr) > BIG_ROWS
-    grid = ANN_GRID_SMALL if big else ANN_GRID
-    print(f"[ANN] {len(feats)} features (all used) | {len(X_tr)} training rows | grid of {len(list(ParameterGrid(grid)))} candidates x {ANN_FOLDS} grouped folds", flush=True)
-    _search.data = (X_tr, y_tr, g_tr)
-    say("Tuning the neural network (PyTorch)", f"{len(list(ParameterGrid(grid)))} architectures × {ANN_FOLDS}-fold grouped CV · up to {ANN_EPOCHS} epochs each")
-    s, method = _search("ANN", TorchANN(), grid, "grid", gkf)                         # grouped-CV grid search (scaler + imputer inside the Pipeline)
-    ann = s.best_estimator_; cv = _search_metrics(s) or _cv_eval(ann, X_tr, y_tr, gkf, g_tr)[1]
-    trm, tem = _holdout(ann, X_tr, y_tr), _holdout(ann, X_te, y_te)
-    say("ANN evaluated on the unseen 40%", f"test R² {tem['R2']:.3f} · CV R² {cv['R2']:.3f}")
-    params = {k.replace("m__", ""): (list(v) if isinstance(v, tuple) else v) for k, v in s.best_params_.items()}
-    comp = [{"model": "ANN", "search": method, "params": params, "R2": tem["R2"], "MAE": tem["MAE"],
-             "train_R2": trm["R2"], "train_MAE": trm["MAE"],
-             "cv_R2": cv["R2"], "cv_R2_std": cv["R2_std"], "cv_MAE": cv["MAE"]}]
-    print(f"[ANN] grouped-CV R2 {cv['R2']:.3f} | test R2 {tem['R2']:.3f} MAE {tem['MAE']:.3f} log units", flush=True)
-    say("Applicability domain", "Mahalanobis distance threshold from the training data")
-    # applicability domain, SHAP: same method as the SVR, on all features
-    Xs = ann[:-1].transform(X_tr); mu = Xs.mean(0); VI = np.linalg.pinv(np.cov(Xs, rowvar=False).reshape(Xs.shape[1], Xs.shape[1]))
-    dtr = np.sqrt(np.einsum("ij,jk,ik->i", Xs - mu, VI, Xs - mu)); thr = float(np.quantile(dtr, q))
-    say("Shapley feature importance", "which descriptors drive the ANN predictions")
-    gs, base = global_shap(ann, X_tr, label_map)
-    p_tr, p_te = ann.predict(X_tr), ann.predict(X_te)
-    idx = d.index; names = [str(v) for v in d[fcol].iloc[tr_i]] if fcol in d.columns else None
-    stats = {c: {"min": _f(Xall[c].min()), "max": _f(Xall[c].max()), "median": _f(Xall[c].median())} for c in feats}
-    bundle = {"pipeline": ann, "features": feats, "mu": mu, "VI": VI, "threshold": thr, "quantile": q,
-              "oof": {int(i): float(v) for i, v in zip(idx[te_i], p_te)},
-              "train_index": [int(i) for i in idx[tr_i]], "test_index": [int(i) for i in idx[te_i]],
-              "background": X_tr.reset_index(drop=True), "train_formulas": names, "train_y": [float(v) for v in y_tr], "feature_stats": stats}
-    hist = ann.named_steps["m"].loss_history_
-    result = {"model_type": "ANN", "comparison": comp, "primary": "ANN", "features": feats, "selected_features": feats,
-              "n_train": int(len(tr_i)), "n_test": int(len(te_i)), "n_total": int(keep_rows.sum()), "n_groups": n_groups,
-              "n_train_groups": int(len(set(g_tr))), "n_test_groups": int(len(set(groups[te_i]))),
-              "n_dropped_no_target": int((~keep_rows).sum()), "ad": {"quantile": q, "threshold": thr, "n_train": int(len(dtr))},
-              "parity": {"y": y_te.tolist(), "pred": p_te.tolist(), "y_train": y_tr.tolist(), "pred_train": p_tr.tolist()},
-              "stats": _relations(X_tr, y_tr), "feature_stats": stats, "shap": gs, "shap_base": base,
-              "architecture": {"input": len(feats), "hidden": params.get("hidden"), "output": 1, "activation": "ReLU", "optimizer": "AdamW (cosine LR)", "epochs": ANN_EPOCHS, "batch_size": ANN_BATCH, "weight_decay": params.get("weight_decay")},
-              "loss_curve": [float(v) for v in hist[:: max(1, len(hist) // 60)]],
-              "cv": "Same grouped 60:40 split by composition as the SVR (GroupShuffleSplit, seed 42). The ANN uses ALL features (no feature selection); its hyper-parameters are tuned with grouped 3-fold CV inside the 60% training part only; scores shown are on the unseen 40%."}
-    return result, bundle
-
-
 def _f(v):
     try:
         v = float(v); return None if np.isnan(v) or np.isinf(v) else v
     except Exception: return None
 
 
-def screen(df, mp, bundle, label_map, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIMIT):
+def screen(df, mp, bundle, label_map, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIMIT, ad_filter=True):
     pl, cols = bundle["pipeline"], bundle["features"]; X = df[cols]
     pred = pl.predict(X); Xs = pl[:-1].transform(X)
     dist = np.sqrt(np.einsum("ij,jk,ik->i", Xs - bundle["mu"], bundle["VI"], Xs - bundle["mu"])); thr = bundle["threshold"]
@@ -541,7 +420,7 @@ def screen(df, mp, bundle, label_map, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIM
     rows = []
     for i in range(len(df)):
         pl_k = float(pred[i]); inside = bool(dist[i] <= thr); fails, nas = [], []
-        if not inside: fails.append(f"Outside applicability domain (Mahalanobis {dist[i]:.2f} > threshold {thr:.2f}); prediction is less reliable.")
+        if not inside and ad_filter: fails.append(f"Outside applicability domain (Mahalanobis {dist[i]:.2f} > threshold {thr:.2f}); prediction is less reliable.")
         ev = _f(eh.iloc[i]) if eh is not None else None
         if ev is None: er = "NOT AVAILABLE"; nas.append("Ehull value not available - stability criterion not evaluated.")
         elif ev <= ehull_limit: er = "PASS"
@@ -580,12 +459,24 @@ def closeness(dist, thr, ehull, ehull_limit, pred, orr_limit=ORR_LIMIT):
     return s, p, ("green" if s <= TIER_GREEN else "red" if s > TIER_RED else "orange")
 
 
-def predict_single(bundle, values, label_map, formula=None, ehull=None, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIMIT):
+def closeness_batch(tec, tec_limit, ehull, ehull_limit, pred, orr_limit=ORR_LIMIT):
+    """Batch-screening ranking: mean normalised shortfall over the three filters (TEC, Ehull, log10 k*). The applicability domain is information only
+    and is NOT part of the score. A cathode without predictions (not evaluable) gets no score and tier 'na'."""
+    p = {"tec": None if tec is None else max(0.0, (tec - tec_limit) / tec_limit),
+         "ehull": None if ehull is None else max(0.0, (ehull - ehull_limit) / ehull_limit),
+         "orr": None if pred is None else max(0.0, orr_limit - pred)}
+    v = [x for x in p.values() if x is not None]
+    if not v: return None, p, "na"
+    sc = float(sum(v) / len(v))
+    return sc, p, ("green" if sc <= TIER_GREEN else "red" if sc > TIER_RED else "orange")
+
+
+def predict_single(bundle, values, label_map, formula=None, ehull=None, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIMIT, ad_filter=True):
     """Predict ONE new cathode with the saved model. Uses exactly the same code as the batch screening, so decisions always agree."""
     cols = bundle["features"]
     row = {c: (float(values[c]) if values.get(c) not in (None, "") else np.nan) for c in cols}
     df = pd.DataFrame([row]); df["_formula"] = formula or "New cathode"; df["_ehull"] = np.nan if ehull in (None, "") else float(ehull)
-    r = screen(df, {"formula": "_formula", "ehull": "_ehull"}, bundle, label_map, ehull_limit, orr_limit)[0]
+    r = screen(df, {"formula": "_formula", "ehull": "_ehull"}, bundle, label_map, ehull_limit, orr_limit, ad_filter)[0]
     r["imputed"] = [c for c in cols if np.isnan(row[c])]
     return r
 

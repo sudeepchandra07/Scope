@@ -1,0 +1,165 @@
+{
+ "targets": {
+  "Gap": {
+   "column": "Gap",
+   "features": 15,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.639,
+   "cv_MAE": 0.3145,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.01,
+    "svr__gamma": 0.01
+   },
+   "min": 1.52053486867,
+   "max": 6.961608720783327
+  },
+  "Oxide_vacancy": {
+   "column": "Oxide_vacancy",
+   "features": 15,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.033,
+   "cv_MAE": 0.5967,
+   "params": {
+    "svr__C": 30.0,
+    "svr__epsilon": 0.05,
+    "svr__gamma": 0.1
+   },
+   "min": -5.677833333333331,
+   "max": 5.132939999999998
+  },
+  "Work_Function": {
+   "column": "Work_Function",
+   "features": 15,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.681,
+   "cv_MAE": 0.0888,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.01,
+    "svr__gamma": "scale"
+   },
+   "min": 1.963202044444443,
+   "max": 3.567403433333331
+  },
+  "Log_dieletric": {
+   "column": "Log_dieletric",
+   "features": 15,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.498,
+   "cv_MAE": 0.0196,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.01,
+    "svr__gamma": 0.03
+   },
+   "min": 1.012942909234277,
+   "max": 1.398333176291139
+  },
+  "O_pband": {
+   "column": "O_pband",
+   "features": 15,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.916,
+   "cv_MAE": 0.0961,
+   "params": {
+    "svr__C": 10.0,
+    "svr__epsilon": 0.01,
+    "svr__gamma": 0.1
+   },
+   "min": -4.040313000000006,
+   "max": -1.69306
+  },
+  "E_above_hull": {
+   "column": "E_above_hull",
+   "features": 20,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.697,
+   "cv_MAE": 19.0924,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.2,
+    "svr__gamma": 0.1
+   },
+   "min": 10.03043434328666,
+   "max": 276.9053269330995
+  },
+  "TEC": {
+   "column": "TEC",
+   "features": 20,
+   "log10": false,
+   "rows": 80,
+   "compositions": 80,
+   "cv_R2": 0.905,
+   "cv_MAE": 0.4788,
+   "params": {
+    "svr__C": 10.0,
+    "svr__epsilon": 0.01,
+    "svr__gamma": 0.1
+   },
+   "min": 10.80117160714287,
+   "max": 21.19199583333332
+  },
+  "Bulk_Ionic": {
+   "column": "Bulk_Ionic_Conductivity_S_cm",
+   "features": 16,
+   "log10": true,
+   "rows": 386,
+   "compositions": 80,
+   "cv_R2": 0.806,
+   "cv_MAE": 0.1912,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.1,
+    "svr__gamma": 0.003
+   },
+   "min": -8.23656322181654,
+   "max": -0.8875349422864458
+  },
+  "Total_Electronic": {
+   "column": "Total_Electronic_Conductivity_S_cm",
+   "features": 16,
+   "log10": true,
+   "rows": 386,
+   "compositions": 80,
+   "cv_R2": 0.747,
+   "cv_MAE": 0.1465,
+   "params": {
+    "svr__C": 100.0,
+    "svr__epsilon": 0.2,
+    "svr__gamma": 0.01
+   },
+   "min": -1.8400362504315892,
+   "max": 1.7640027397207962
+  },
+  "ASR": {
+   "column": "ASR_Ohm_cm2",
+   "features": 16,
+   "log10": true,
+   "rows": 386,
+   "compositions": 80,
+   "cv_R2": 0.808,
+   "cv_MAE": 0.2969,
+   "params": {
+    "svr__C": 30.0,
+    "svr__epsilon": 0.2,
+    "svr__gamma": 0.003
+   },
+   "min": -1.3226767593952529,
+   "max": 4.5595952805222835
+  }
+ },
+ "dataset": "Kstar_Combined_Updated_1.xlsx"
+}
