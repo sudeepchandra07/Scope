@@ -227,7 +227,7 @@ function nav(){$("nav").innerHTML=TABS.map(([k,l,i])=>`<button data-t="${k}" cla
  $("nav").querySelectorAll("button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;reset();BUILT="";$("main")._h=null;nav();render();scrollTo(0,0)})}
 function toast(a){const m=msg(a),t=document.createElement("div");t.className="ts";t.innerHTML=`<div class="${fic(a)}">${svg(a.type)}</div><div>${m.h}</div>`;$("toasts").appendChild(t);setTimeout(()=>t.classList.add("o"),4200);setTimeout(()=>t.remove(),4700)}
 async function poll(){if(busy)return;busy=true;const dot=$("dot"),lt=$("lt");
- try{const r=await fetch("/api/admin/snapshot",AH);if(r.status===401||r.status===403){ss.removeItem("pcs_admin_token");TK=null;return showAdminLogin()}if(!r.ok)throw 0;
+ try{const r=await fetch("https://scope-np28.onrender.com/api/admin/snapshot",AH);if(r.status===401||r.status===403){ss.removeItem("pcs_admin_token");TK=null;return showAdminLogin()}if(!r.ok)throw 0;
   D=await r.json();const top=D.activity.length?D.activity[0].id:0;
   if(SEEN!==null)D.activity.filter(a=>a.id>SEEN).reverse().slice(-3).forEach(toast);
   dot.classList.remove("off");lt.textContent="Live · "+D.server_time.slice(11);render();SEEN=top;if(DR)loadUser()}
