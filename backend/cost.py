@@ -365,12 +365,12 @@ def funnel(rows):
     total = len(rows); cur = list(rows); out = [{"key": "screened", "label": "Cathodes screened", "rule": "", "entered": total, "passed": total, "failed": 0, "na": 0}]
     if any(r.get("tec_result") for r in rows):
         stages = (("tec", "Thermal expansion (TEC)", "predicted TEC ≤ 15 ×10⁻⁶ K⁻¹", "tec_result"),
-                  ("orr", "Active (log10 k*)", "predicted log10(k*) ≥ −6.40", "orr_result"),
+                  ("orr", "Active (log10 k*)", "predicted log10(k*) ≥ −6.40 log₁₀(cm/s)", "orr_result"),
                   ("ehull", "Stable (Ehull)", "predicted Ehull ≤ 57 meV/atom", "ehull_result"))
     else:
         stages = (("ad", "Inside applicability domain", "Mahalanobis distance ≤ AD threshold", "ad_result"),
                   ("ehull", "Stable (Ehull)", "Ehull ≤ 57 meV/atom", "ehull_result"),
-                  ("orr", "Active (ORR)", "predicted log10(k*) ≥ −6.40", "orr_result"))
+                  ("orr", "Active (ORR)", "predicted log10(k*) ≥ −6.40 log₁₀(cm/s)", "orr_result"))
     for key, label, rule, f in stages:
         p = [r for r in cur if r[f] == "PASS"]; na = sum(1 for r in cur if r[f] == "NOT AVAILABLE")
         out.append({"key": key, "label": label, "rule": rule, "entered": len(cur), "passed": len(p), "failed": len(cur) - len(p) - na, "na": na}); cur = p

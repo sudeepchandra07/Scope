@@ -70,7 +70,7 @@ def run(df, formula_col, temp_c, bundle, props, ehull_limit=ml.EHULL_LIMIT, tec_
             why = (f"No built-in descriptor data for {', '.join(unk)}" if unk else "Descriptors could not be calculated from the formula") + \
                   f" and the dataset has no value for: {', '.join(miss)}. Add those descriptor columns to the dataset to evaluate this cathode."
             rows.append(_blank(i, name, orig, why, notes, thr, temp_c, src, vals)); continue
-        pending.append({"i": i, "name": name, "orig": orig, "vals": vals, "src": src, "notes": notes, "composition": a["composition"], "approx": calc["approx"]})
+        pending.append({"i": i, "name": name, "orig": orig, "vals": vals, "src": src, "notes": notes, "composition": a["composition"]})
     if pending:
         X15 = pd.DataFrame([{k: p["vals"][k] for k in fd.BASIC} for p in pending])
         # ---- 4: 5 material properties (dataset value, else predicted) ----
@@ -92,10 +92,9 @@ def run(df, formula_col, temp_c, bundle, props, ehull_limit=ml.EHULL_LIMIT, tec_
             v = p["vals"]; k_pred = float(pred[j]); eh, tc = v["E_above_hull"], v["TEC"]; inside = bool(dist[j] <= thr["ad"]); fails = []
             tec_r = "PASS" if tc <= tec_limit else "FAIL"; orr_r = "PASS" if k_pred >= orr_limit else "FAIL"; eh_r = "PASS" if eh <= ehull_limit else "FAIL"
             if tec_r == "FAIL": fails.append(f"TEC {tc:.2f} x10^-6 1/K exceeds the {tec_limit:g} x10^-6 1/K limit.")
-            if orr_r == "FAIL": fails.append(f"ORR activity criterion not satisfied: predicted log10(k*) {k_pred:.2f} < benchmark {orr_limit:.2f} (LSC benchmark used in the research paper).")
+            if orr_r == "FAIL": fails.append(f"ORR activity criterion not satisfied: predicted log10(k*) {k_pred:.2f} < benchmark {orr_limit:.2f} (log10 of k* in cm/s; LSC benchmark used in the research paper).")
             if eh_r == "FAIL": fails.append(f"Ehull {eh:.1f} meV/atom exceeds the {ehull_limit:g} meV/atom limit (LSC value).")
             notes = list(p["notes"])
-            if p["approx"]: notes.append({"l": "info", "t": "Y and Zr descriptor values are exact only when both are present in equal amounts."})
             rows.append({"row_index": p["i"], "formula": p["name"], "pred_log": k_pred, "pred_k": float(10 ** k_pred), "dist": float(dist[j]), "ad": "INSIDE" if inside else "OUTSIDE",
                          "ad_result": "PASS" if inside else "FAIL", "ehull": float(eh), "ehull_result": eh_r, "tec": float(tc), "tec_result": tec_r,
                          "orr_value": k_pred, "orr_result": orr_r, "final": "FAIL" if fails else "PASS", "reason": " | ".join(fails),
