@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR-FUNNEL-URL.ts.net/api/:path*"
+      "destination": "https://scope.tail6c9c46.ts.net/api/:path*"
     },
     {
       "source": "/admin",
