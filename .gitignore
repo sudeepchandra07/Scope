@@ -4,3 +4,5 @@ __pycache__/
 .perovskite_screening/
 *.pyc
 .env
+
+backend/app.py.truncated-backup

@@ -24,8 +24,13 @@ DB = STORE / "app.db"; KEYFILE = STORE / "secret.key"
 if not KEYFILE.exists(): KEYFILE.write_text(secrets.token_hex(32))
 SER = URLSafeTimedSerializer(os.environ.get("SECRET_KEY", KEYFILE.read_text()))
 import hmac
-ADMIN_USER = "admin@123"                       # fixed admin login (kept in code, NOT in the database, so a data reset never removes it)
-ADMIN_HASH = generate_password_hash("CRYSTAL")
+# Admin credentials are supplied through environment variables.
+ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+if not ADMIN_USER or not ADMIN_PASSWORD:
+    raise RuntimeError("Set ADMIN_USER and ADMIN_PASSWORD environment variables before starting SCOPE.")
+ADMIN_HASH = generate_password_hash(ADMIN_PASSWORD)
+del ADMIN_PASSWORD
 USER_RE = re.compile(r"[A-Za-z0-9._@-]{3,30}")      # custom usernames: 3-30 letters / digits / . _ @ -
 ALLOWED = {".csv", ".xlsx", ".xls"}; SUMMARY_VER = 5
 
