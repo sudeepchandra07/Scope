@@ -47,7 +47,7 @@ python build_builtin_models.py path/to/your_dataset.xlsx
 ```
 This writes `svr_pipeline.joblib` and `meta.json` to `backend/builtin_models/`. The model uses the full descriptor set (basic + enhanced + 1000/T). Keep the library versions in `requirements.txt` the same on the server as on the machine that built the model (joblib files are version-sensitive).
 
-**Status:** `backend/builtin_models/` contains the SVR trained on `Kstar_Combined_Updated_1.xlsx` (386 rows, 23 descriptors; test R² 0.72, CV R² 0.71).
+**Status:** `backend/builtin_models/` contains the SVR trained on `SCOPE_Master_Combined_Dataset.xlsx` (1636 rows, 23 descriptors; test R² 0.89, CV R² 0.89).
 
 **Predict using SVR (other features).** `python build_property_models.py path/to/dataset.xlsx` trains one SVR per extra feature (band gap, O-vacancy energy, work function, log dielectric, O p-band centre from the 15 formula descriptors; Ehull and TEC from the 15 descriptors + those 5 properties; bulk ionic conductivity, total electronic conductivity and ASR as log10 from the descriptors + 1000/T) and saves `props.joblib` + `props_meta.json`. Scores are grouped cross-validated R².
 
@@ -65,3 +65,35 @@ On the **Upload Dataset** tab choose a CSV/XLSX of cathode formulas, type the op
 5. **Ehull and TEC predicted** by SVR, then **log10(k\*) predicted** by the built-in SVR from all 23 inputs.
 **Funnel / PASS filters (only these three):** TEC <= 15 x1e-6 1/K -> log10(k*) >= -6.40 -> Ehull <= 57 meV/atom. Applicability domain and cost are shown for information only. A cathode whose formula is not recognised, or whose element has no descriptor data and no dataset column, is listed as NOT EVALUABLE with the reason (never guessed). Results are identical to the Predict page for the same formula and temperature.
 Older datasets screened with the previous train-on-upload flow still open normally.
+
+## Units (shown everywhere)
+Every input, output and filter carries its unit in the app (Predict page fields, model-input tables, results table, filters, funnel, detail pop-ups, 3D panel, admin Model details) and in the Excel/CSV export (column names and a "Units" line in the Notes sheet). The single source of truth is `frontend/units.js` (mirrored in `backend/units.py` for exports / admin) - edit both to change a unit.
+| Quantity | Unit |
+|---|---|
+| Valence-electron ionization energy (A, B) · Band gap · Work function · O p-band centre · O-vacancy formation energy | eV |
+| Shannon ionic radius (A, B) | Å |
+| Ionic Lewis acidity Sa (A, B) | v.u. (valence units) |
+| B-site d-electron count | electrons |
+| Electronegativity · tolerance factor · ionicity indices · average ionic character · Smith acidity · log dielectric constant · Mahalanobis distance | no unit (left blank) |
+| Temperature | °C (model input 1000/T in 10³ K⁻¹) |
+| Bulk ionic / total electronic conductivity | S/cm |
+| ASR | Ω·cm² |
+| **Outputs** TEC · Ehull · k* · log10(k*) · cost | ×10⁻⁶ K⁻¹ · meV/atom · cm/s · log₁₀(cm/s) · USD/kg |
+| **Filters** TEC ≤ 15 · log10(k*) ≥ −6.40 · Ehull ≤ 57 | ×10⁻⁶ K⁻¹ · log₁₀(cm/s) · meV/atom |
+
+## Element tables (formula -> 15 descriptors)
+`frontend/descriptors.js` and `backend/formula_desc.py` (keep both identical) hold the per-element values, now calibrated on `SCOPE_Master_Combined_Dataset.xlsx`:
+12 A-site elements (Ba Bi Ca Cs Dy Gd La Nd Pr Rb Sm Sr) and 21 B-site elements (Al Ce Co Cr Cu Fe Ga Hf In Mg Mn Mo Nb Ni Sb Sc Sn Ti Y Zn Zr).
+Checked against the dataset: 329 of 334 compositions are reproduced to within rounding (max error 5e-4). The 5 exceptions are dataset quirks, not table errors:
+the four `LnBaCo2O5` layered double perovskites (the dataset counts Ba on the B-site) and `Ba0.5Zn0.5Fe0.2Ti0.4Cu0.4O3` (Zn counted on the A-site); the app flags these as non-ABO3 anyway.
+Hf, In, Sn (1 composition each) and Sb, Mg, Ce (2-3) are determined from very few rows, and Y has the same EN / R values as Zr in the dataset, so treat those elements with care.
+
+
+## Per-cathode report and .cif (Results page)
+Every row of the **Screening Results** table (PASS or FAIL) has two buttons, also available in the cathode's detail pop-up:
+* **.cif** – shows / copies / downloads the estimated cubic-perovskite structure (Pm-3m, 48 symmetry operators, partial occupancies for mixed sites). Cell edge a = 0.5·[2(rB+rO) + √2(rA+rO)] from the formula's ionic radii (same formula as the *Density* descriptor), so it is an estimate, not a relaxed structure. Works for every cathode whose elements have radius data.
+* **Report** – a 5-page report in the style of the SCOPE PDFs, **Download PDF** uses the browser's print dialog (A4, choose *Save as PDF*).
+  * PASS: key metrics, lattice, 3D view, site composition, 23 model inputs, ionic/electronic conductivity and ASR (the Predict-page SVRs), confidence, precursor-cost split, solid-state recipe for 5 g (masses from the cost estimate's precursor list), safety notes, lab validation protocol T1–T5.
+  * FAIL: the same first two pages, then why each failed filter failed (rule-of-thumb reading of the model inputs), what is already good, target values, and a table of candidate fixes that are **really re-screened** with the same SVR pipeline (`backend/report.py`), plus a recommended path.
+  * Not available for NOT EVALUABLE cathodes or for older train-on-upload results.
+API: `GET /api/datasets/<id>/results/<rid>/cif` and `.../report`. Code: `backend/report.py`, `frontend/report.js`.

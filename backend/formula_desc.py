@@ -228,16 +228,29 @@ def analyse(text):
 # ------------------------------------------------------------------ the 15 formula descriptors (frontend/descriptors.js)
 # Row order: [Ion, EN, R, Sa, Ionicity, SmithAcidity, (B-site only) d-electrons]
 A_TAB = {
-    "Ba": [10.0, 1.087, 1.61, 0.194, 0.7643, -10.8], "Ca": [11.87, 1.092, 1.34, 0.264, 0.7639, -7.5], "Dy": [22.8, 1.293, 1.24, 0.396, 0.7453, -4.7],
-    "Gd": [20.63, 1.263, 1.27, 0.371, 0.7481, -5.0], "La": [19.18, 1.225, 1.36, 0.343, 0.7517, -6.1], "Pr": [21.62, 1.258, 1.32, 0.326, 0.7486, -5.8],
+    "Ba": [10.0, 1.087, 1.61, 0.194, 0.7643, -10.8], "Bi": [25.56, 1.399, 1.17, 0.436, 0.7344, -3.5],
+    "Ca": [11.87, 1.092, 1.34, 0.264, 0.7639, -7.5], "Cs": [3.89, 0.946, 1.88, 0.088, 0.7788, -13.0],
+    "Dy": [22.8, 1.293, 1.24, 0.396, 0.7453, -4.7], "Gd": [20.63, 1.263, 1.27, 0.371, 0.7481, -5.0],
+    "La": [19.18, 1.225, 1.36, 0.343, 0.7517, -6.1], "Nd": [22.1, 1.256, 1.31, 0.363, 0.7488, -5.7],
+    "Pr": [21.62, 1.258, 1.32, 0.326, 0.7486, -5.8], "Rb": [4.18, 0.961, 1.72, 0.097, 0.7774, -12.7],
     "Sm": [23.4, 1.283, 1.28, 0.38, 0.7463, -5.1], "Sr": [11.03, 1.093, 1.44, 0.222, 0.7638, -9.4]}
 B_TAB = {
-    "Al": [28.43, 1.61, 0.5, 0.583, 0.714, -2.0, 0.0], "Co": [33.5, 1.69, 0.55, 0.5, 0.7058, -3.8, 6.0], "Cr": [30.96, 1.59, 0.62, 0.5, 0.7161, 6.6, 3.0],
-    "Fe": [30.65, 1.65, 0.55, 0.528, 0.7099, -1.7, 5.0], "Ga": [28.0, 1.81, 0.62, 0.65, 0.6934, -1.6, 0.0], "Mg": [15.03, 1.31, 0.72, 0.334, 0.7449, -4.5, 0.0],
-    "Mn": [33.67, 1.6275, 0.58, 0.513, 0.7122, -1.92, 4.0], "Ni": [35.19, 1.7, 0.56, 0.502, 0.7048, -2.4, 7.0], "Sc": [24.76, 1.42, 0.885, 0.481, 0.733, 0.0, 0.0],
-    "Ti": [43.27, 1.73, 0.605, 0.676, 0.7016, 0.7, 0.0], "Y": [28.865, 1.22, 0.9, 0.515, 0.7483, -3.2, 0.0], "Zr": [28.865, 1.33, 0.72, 0.515, 0.7483, -3.2, 0.0]}
+    "Al": [28.43, 1.61, 0.5, 0.583, 0.714, -2.0, 0.0], "Ce": [36.76, 1.608, 0.87, 0.45, 0.7139, -2.7, 0.0],
+    "Co": [33.5, 1.69, 0.55, 0.5, 0.7058, -3.8, 6.0], "Cr": [30.96, 1.59, 0.62, 0.5, 0.7161, 6.6, 3.0],
+    "Cu": [20.29, 1.37, 0.73, 0.374, 0.7372, -2.5, 9.0], "Fe": [30.65, 1.65, 0.55, 0.528, 0.7099, -1.7, 5.0],
+    "Ga": [28.0, 1.81, 0.62, 0.65, 0.6933, -1.6, 0.0], "Hf": [33.33, 1.706, 0.71, 0.59, 0.7043, -3.1, 0.0],
+    "In": [28.03, 1.81, 0.8, 0.495, 0.6941, -2.4, 0.0], "Mg": [15.03, 1.31, 0.72, 0.334, 0.7451, -4.5, 0.0],
+    "Mn": [33.67, 1.6275, 0.58, 0.513, 0.7122, -1.92, 4.0], "Mo": [68.83, 2.101, 0.59, 1.185, 0.6655, 5.2, 0.0],
+    "Nb": [50.57, 1.86, 0.64, 0.835, 0.6892, 1.0, 0.0], "Ni": [35.19, 1.7, 0.56, 0.502, 0.7048, -2.4, 7.0],
+    "Sb": [56.0, 1.971, 0.6, 0.833, 0.6783, 2.3, 0.0], "Sc": [24.76, 1.42, 0.885, 0.481, 0.733, 0.0, 0.0],
+    "Sn": [40.73, 1.85, 0.69, 0.714, 0.6901, 1.5, 0.0], "Ti": [43.27, 1.73, 0.605, 0.676, 0.7016, 0.7, 0.0],
+    "Y": [28.865, 1.275, 0.81, 0.515, 0.7484, -3.2, 0.0], "Zn": [17.96, 1.336, 0.74, 0.405, 0.7407, -3.2, 0.0],
+    "Zr": [28.865, 1.275, 0.81, 0.515, 0.7484, -3.2, 0.0]}
 O_R = 1.40
-SHARED = {"Y", "Zr"}
+MASS = {"Ba": 137.33, "Bi": 208.98, "Ca": 40.078, "Cs": 132.91, "Dy": 162.50, "Gd": 157.25, "La": 138.91, "Nd": 144.24, "Pr": 140.91, "Rb": 85.468, "Sm": 150.36, "Sr": 87.62,
+        "Al": 26.982, "Ce": 140.12, "Co": 58.933, "Cr": 51.996, "Cu": 63.546, "Fe": 55.845, "Ga": 69.723, "Hf": 178.49, "In": 114.82, "Mg": 24.305, "Mn": 54.938, "Mo": 95.95,
+        "Nb": 92.906, "Ni": 58.693, "Sb": 121.76, "Sc": 44.956, "Sn": 118.71, "Ti": 47.867, "Y": 88.906, "Zn": 65.38, "Zr": 91.224}   # g/mol (same as descriptors.js)
+O_MASS, AMU_G_CM3 = 15.999, 1.66054   # density estimate: 1 g/mol per A^3 per cell = 1.66054 g/cm^3
 BASIC = ["Ion_A", "Ion_B", "EN_A", "EN_B", "R_A", "R_B", "Sa_A", "Sa_B", "Delec_B", "t", "Ionic_A", "Ionic_B", "Avg_Ionic_Character", "SmithAcid_A", "SmithAcid_B"]
 
 
@@ -246,11 +259,12 @@ def _site(rows, tab, has_d):
     unknown = [r[0] for r in lst if r[0] not in tab]
     if not lst or unknown: return {"ok": False, "unknown": unknown, "tot": tot}
     m = lambda i: sum(tab[r[0]][i] * r[1] / tot for r in lst)
-    return {"ok": True, "tot": tot, "ion": m(0), "en": m(1), "r": m(2), "sa": m(3), "ionic": m(4), "sm": m(5), "d": m(6) if has_d else None, "shared": any(r[0] in SHARED for r in lst)}
+    mass = sum(MASS[r[0]] * r[1] / tot for r in lst)
+    return {"ok": True, "tot": tot, "mass": mass, "ion": m(0), "en": m(1), "r": m(2), "sa": m(3), "ionic": m(4), "sm": m(5), "d": m(6) if has_d else None}
 
 
 def compute(comp):
-    """comp = {A: [(el, n)...], B: [(el, n)...]}. Returns {values, unknownA, unknownB, approx}: the 15 descriptors that could be calculated (never invented)."""
+    """comp = {A: [(el, n)...], B: [(el, n)...]}. Returns {values, unknownA, unknownB}: the 15 descriptors that could be calculated (never invented)."""
     a, b = _site(comp.get("A") or [], A_TAB, False), _site(comp.get("B") or [], B_TAB, True); v = {}
     if a["ok"]:
         v.update(Ion_A=round(a["ion"], 4), EN_A=round(a["en"], 4), R_A=round(a["r"], 4), Sa_A=round(a["sa"], 4), Ionic_A=round(a["ionic"], 4), SmithAcid_A=round(a["sm"], 4))
@@ -259,4 +273,13 @@ def compute(comp):
     if a["ok"] and b["ok"]:
         v["t"] = round((a["r"] + O_R) / (math.sqrt(2) * (b["r"] + O_R)), 4)
         v["Avg_Ionic_Character"] = round((a["tot"] * a["ionic"] + b["tot"] * b["ionic"]) / (a["tot"] + b["tot"]), 4)
-    return {"values": v, "unknownA": a.get("unknown", []), "unknownB": b.get("unknown", []), "approx": any(s["ok"] and s["shared"] for s in (a, b))}
+    if a["ok"] and b["ok"]:   # estimated density of a cubic ABO3 cell (Z = 1, A = B = 1, O = 3); same formula as descriptors.js
+        edge = 0.5 * (2 * (b["r"] + O_R) + math.sqrt(2) * (a["r"] + O_R)); M = a["mass"] + b["mass"] + 3 * O_MASS
+        v["Density"] = round(M * AMU_G_CM3 / edge ** 3, 3)
+    return {"values": v, "unknownA": a.get("unknown", []), "unknownB": b.get("unknown", [])}
+
+
+def comp_key(comp):
+    """Order-independent key of a composition {A: [(el, n)...], B: [(el, n)...]}: same cathode written in any element order / with or without an implied index gives the same key."""
+    side = lambda rows: ",".join(f"{e}{round(float(n), 4):g}" for e, n in sorted((r[0], r[1]) for r in (rows or []) if r[0] and r[1] > 0))
+    return side(comp.get("A")) + "|" + side(comp.get("B"))

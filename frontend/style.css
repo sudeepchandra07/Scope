@@ -999,3 +999,18 @@ table.rs-cost{font-size:13.5px}table.rs-cost th{font-size:11.5px;padding:11px 10
 
 /* "Welcome <username>" lighter than the bold SCOPE brand (800) */
 #main>h2:first-child{font-weight:500}
+
+/* units shown beside every input / output label */
+.fl-u{color:#5b7a99;font-weight:600;white-space:nowrap}
+#pmount .fl-u{color:#6f8aa6}
+.rs-mv{white-space:nowrap}
+/* keep unit symbols in their correct case inside upper-cased table headings (meV/atom, g, kg ...) */
+th small,th .un,.un{text-transform:none;letter-spacing:0}
+
+/* per-cathode files: Report + .cif buttons (results table + detail pop-up) */
+#app td.files{white-space:nowrap;text-align:right}
+#app td.files .btn.sm,#modal .rsmod-files .btn.sm{padding:5px 14px;font-size:12px;box-shadow:none}
+#modal .rsmod-bar .rsmod-files{margin-left:auto;background:none;border:0;padding:0;display:flex;gap:6px}
+
+.rs-files{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.rs-files .btn{white-space:nowrap}

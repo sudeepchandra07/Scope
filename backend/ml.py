@@ -426,7 +426,7 @@ def screen(df, mp, bundle, label_map, ehull_limit=EHULL_LIMIT, orr_limit=ORR_LIM
         elif ev <= ehull_limit: er = "PASS"
         else: er = "FAIL"; fails.append(f"Ehull {ev:.1f} meV/atom exceeds the {ehull_limit:g} meV/atom limit (LSC value).")
         orr = "PASS" if pl_k >= orr_limit else "FAIL"
-        if orr == "FAIL": fails.append(f"ORR activity criterion not satisfied: predicted log10(k*) {pl_k:.2f} < benchmark {orr_limit:.2f} (LSC benchmark used in the research paper).")
+        if orr == "FAIL": fails.append(f"ORR activity criterion not satisfied: predicted log10(k*) {pl_k:.2f} < benchmark {orr_limit:.2f} (log10 of k* in cm/s; LSC benchmark used in the research paper).")
         final = "FAIL" if fails else ("INCOMPLETE" if nas else "PASS")
         rows.append({"row_index": i, "formula": str(df[mp["formula"]].iloc[i]) if mp.get("formula") else f"Row {i+1}",
             "pred_log": pl_k, "pred_k": float(10 ** pl_k), "dist": float(dist[i]), "ad": "INSIDE" if inside else "OUTSIDE", "ad_result": "PASS" if inside else "FAIL",

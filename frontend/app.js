@@ -311,7 +311,7 @@ P.training=()=>{if(!S.ds)return $("#main").innerHTML=need();const a=S.ds.analysi
  ${need_map&&!VIEW?`<div class="card"><h3>Select the missing columns</h3><table>${!m.formula?pick("Chemical formula","m_f"):""}${!m.target?pick("Target log10(k*)","m_t"):""}</table></div>`:""}
  <div class="card"><details id="mapdet"${S.mapOpen?" open":""} ontoggle="S.mapOpen=this.open"><summary><h3 style="display:inline">Mapping of features</h3></summary>
  <p class="muted small" style="margin:8px 0">If a descriptor is mapped to the wrong column, pick the correct one from your dataset's columns.</p>
- <div class="tw"><table><thead><tr><th>Paper descriptor</th><th>Group</th><th>Dataset column</th><th>Status</th></tr></thead><tbody>${d.map(e=>`<tr><td>${esc(e.label)}</td><td>${e.group}</td><td>${selc("",a.columns,e.column).replace('<select id="">',`<select ${VIEW?"disabled":""} onchange="setMap('${e.key}',this.value)">`).replace("— choose column —","— not mapped —")}</td><td id="ms_${e.key}">${mstat(e)}</td></tr>`).join("")}</tbody></table></div></details></div>
+ <div class="tw"><table><thead><tr><th>Paper descriptor</th><th>Group</th><th>Unit</th><th>Dataset column</th><th>Status</th></tr></thead><tbody>${d.map(e=>`<tr><td>${esc(e.label)}</td><td>${e.group}</td><td>${esc(UNITS.unit(e.key))}</td><td>${selc("",a.columns,e.column).replace('<select id="">',`<select ${VIEW?"disabled":""} onchange="setMap('${e.key}',this.value)">`).replace("— choose column —","— not mapped —")}</td><td id="ms_${e.key}">${mstat(e)}</td></tr>`).join("")}</tbody></table></div></details></div>
  ${miss.length?`<div class="card"><h3>Missing values</h3>${miss.map(([c,n])=>`${esc(c)}: ${n}`).join(" · ")}</div>`:""}
  ${inv.length?`<div class="card"><h3>Invalid numerical values</h3>${inv.map(([c,n])=>`${esc(c)}: ${n} non-numeric entries treated as missing`).join("<br>")}</div>`:""}
  ${VIEW?"":`<div class="card"><button class="btn train-big" onclick="runTrain()">Train dataset</button></div>`}`};
@@ -331,7 +331,7 @@ function parity(p){
  const W=380,pad=40,all=p.y.concat(p.pred,p.y_train||[],p.pred_train||[]),lo=Math.min(...all),hi=Math.max(...all),sc=v=>pad+(v-lo)/(hi-lo)*(W-2*pad),tk=[0,1,2,3,4].map(i=>lo+(hi-lo)*i/4);
  const grid=tk.map(v=>`<line x1="${sc(v)}" x2="${sc(v)}" y1="${pad-10}" y2="${W-pad}" stroke="#eef2f6"/><line y1="${W-sc(v)}" y2="${W-sc(v)}" x1="${pad}" x2="${W-pad+10}" stroke="#eef2f6"/><text x="${sc(v)}" y="${W-pad+16}" text-anchor="middle" font-size="10" fill="#64748b">${v.toFixed(1)}</text><text x="${pad-6}" y="${W-sc(v)+3}" text-anchor="end" font-size="10" fill="#64748b">${v.toFixed(1)}</text>`).join("");
  const dots=(ys,ps,c,o,r)=>(ys||[]).map((y,i)=>`<circle cx="${sc(y)}" cy="${W-sc(ps[i])}" r="${r}" fill="${c}" opacity="${o}"/>`).join("");
- return `<svg viewBox="0 0 ${W} ${W}" style="width:100%;max-width:${W}px;background:#fff;border:1px solid var(--line);border-radius:10px">${grid}<line x1="${sc(lo)}" y1="${W-sc(lo)}" x2="${sc(hi)}" y2="${W-sc(hi)}" stroke="#c1121f" stroke-dasharray="5 4"/>${dots(p.y_train,p.pred_train,"#9db4c4",.55,3)}${dots(p.y,p.pred,"#0f8b8d",.9,4.5)}<text x="${W/2}" y="${W-6}" text-anchor="middle" font-size="11" fill="#0f2a43">experimental log10(k*)</text><text x="11" y="${W/2}" font-size="11" fill="#0f2a43" transform="rotate(-90 11 ${W/2})" text-anchor="middle">predicted log10(k*)</text></svg>
+ return `<svg viewBox="0 0 ${W} ${W}" style="width:100%;max-width:${W}px;background:#fff;border:1px solid var(--line);border-radius:10px">${grid}<line x1="${sc(lo)}" y1="${W-sc(lo)}" x2="${sc(hi)}" y2="${W-sc(hi)}" stroke="#c1121f" stroke-dasharray="5 4"/>${dots(p.y_train,p.pred_train,"#9db4c4",.55,3)}${dots(p.y,p.pred,"#0f8b8d",.9,4.5)}<text x="${W/2}" y="${W-6}" text-anchor="middle" font-size="11" fill="#0f2a43">experimental log10(k*) (${UNITS.LOGK})</text><text x="11" y="${W/2}" font-size="11" fill="#0f2a43" transform="rotate(-90 11 ${W/2})" text-anchor="middle">predicted log10(k*) (${UNITS.LOGK})</text></svg>
  <div class="lg"><span><i style="background:#0f8b8d"></i>Test set (40%, unseen)</span><span><i style="background:#9db4c4"></i>Training set (60%)</span></div>`}
 
 // ---------- correlation & covariance ----------
@@ -345,13 +345,13 @@ function relMatrix(st,mode){
    bg=i===j?"rgba(100,116,139,.16)":(r>=0?`rgba(37,99,235,${(.08+.82*a).toFixed(2)})`:`rgba(220,38,38,${(.08+.82*a).toFixed(2)})`);
   const tip=i===j?`${nm[i]}: ${mode==="corr"?"compared with itself, always 1":"variance (spread) = "+v}`:`${nm[i]} and ${nm[j]}: ${mode==="corr"?"correlation "+v:"covariance "+v+" (correlation "+(r==null?"–":r.toFixed(2))+")"} – ${r==null?"":relWord(r)+", "+relDir(r)}`;
   return `<td style="background:${bg};color:${i!==j&&a>.55?"#fff":"#0f2a43"}" title="${esc(tip)}">${mode==="corr"?v.toFixed(2):relNum(v)}</td>`};
- return `<div class="mx-wrap"><table class="mx"><thead><tr><th></th>${nm.map((c,j)=>`<th class="${j===n-1?"mx-t":""}"><span>${esc(c)}</span></th>`).join("")}</tr></thead><tbody>${M.map((row,i)=>`<tr><th class="mx-r ${i===n-1?"mx-t":""}">${esc(nm[i])}</th>${row.map((v,j)=>cell(v,i,j)).join("")}</tr>`).join("")}</tbody></table></div>`}
+ return `<div class="mx-wrap"><table class="mx"><thead><tr><th></th>${nm.map((c,j)=>`<th class="${j===n-1?"mx-t":""}" title="${esc(j===n-1?c+" ("+UNITS.LOGK+")":UNITS.label(c))}"><span>${esc(c)}</span></th>`).join("")}</tr></thead><tbody>${M.map((row,i)=>`<tr><th class="mx-r ${i===n-1?"mx-t":""}" title="${esc(i===n-1?nm[i]+" ("+UNITS.LOGK+")":UNITS.label(nm[i]))}">${esc(nm[i])}</th>${row.map((v,j)=>cell(v,i,j)).join("")}</tr>`).join("")}</tbody></table></div>`}
 function relPairs(st,mode){
  const n=st.names.length,ti=n-1,pairs=[],tgt=[];
  for(let i=0;i<ti;i++){const r=st.corr[i][ti];if(r!=null)tgt.push({a:st.names[i],b:st.target,r,c:st.cov[i][ti]});for(let j=i+1;j<ti;j++){const r2=st.corr[i][j];if(r2!=null)pairs.push({a:st.names[i],b:st.names[j],r:r2,c:st.cov[i][j]})}}
  const top=(L,k)=>L.sort((x,y)=>Math.abs(y.r)-Math.abs(x.r)).slice(0,k);
- const row=p=>`<li><b>${esc(p.a)}</b> &amp; <b>${esc(p.b)}</b> <span class="rv2 ${p.r>=0?"pos":"neg"}">${mode==="corr"?(p.r>0?"+":"")+p.r.toFixed(2):relNum(p.c)}</span></li>`;
- return `<div class="relgrid"><div><h4>Descriptors that move most closely together</h4><ul class="rl">${top(pairs,6).map(row).join("")}</ul></div><div><h4>Descriptors most linked to ${esc(st.target)}</h4><ul class="rl">${top(tgt,6).map(row).join("")}</ul></div></div>`}
+ const row=p=>`<li><b>${esc(UNITS.label(p.a))}</b> &amp; <b>${esc(UNITS.label(p.b))}</b> <span class="rv2 ${p.r>=0?"pos":"neg"}">${mode==="corr"?(p.r>0?"+":"")+p.r.toFixed(2):relNum(p.c)}</span></li>`;
+ return `<div class="relgrid"><div><h4>Descriptors that move most closely together</h4><ul class="rl">${top(pairs,6).map(row).join("")}</ul></div><div><h4>Descriptors most linked to ${esc(st.target)} (${UNITS.LOGK})</h4><ul class="rl">${top(tgt,6).map(row).join("")}</ul></div></div>`}
 function relView(st,mode){
 
  return `  <div class="rlegend"><span><i style="background:rgba(37,99,235,.85)"></i>Positive</span><span><i style="background:rgba(220,38,38,.85)"></i>Negative</span></div>
@@ -367,13 +367,13 @@ function relCard(t){
 function modelView(m){
  const t=S.ds.train;
  const src=t,mm=(t.comparison.find(x=>x.model==="SVR")||t.comparison[0]),feats=src.features,nm=m;
- const stats=`<div class="grid g4">${stat((src.n_train??t.n_train)+" / "+(src.n_test??t.n_test),"Train / test rows (60:40 by composition)")}${stat(feats.length,"Features used (selected)")}${stat(fmt(mm.R2),"Test R²","p")}${stat(fmt(mm.MAE),"Test MAE (log units)")}</div>`;
+ const stats=`<div class="grid g4">${stat((src.n_train??t.n_train)+" / "+(src.n_test??t.n_test),"Train / test rows (60:40 by composition)")}${stat(feats.length,"Features used (selected)")}${stat(fmt(mm.R2),"Test R²","p")}${stat(fmt(mm.MAE),"Test MAE ("+UNITS.LOGK+")")}</div>`;
  let extra="";
  if(VIEW){
   const fs=t.feature_selection,tot=fs?fs.n_candidates:feats.length;
   const cmpRows=[...t.comparison.filter(x=>x.model==="SVR").map(x=>({...x,key:"SVR",name:"SVR"}))];
   extra=`<div class="card" style="margin-top:16px"><h3>Selected features <span class="pill">${feats.length} of ${tot}</span></h3><div>${feats.map(c=>`<span class="pill">${esc(c)}</span>`).join("")}</div></div>
-  <div class="card"><h3>Model comparison</h3><div class="tw"><table><thead><tr><th>Model</th><th>Test R²</th><th>Test R² (avg of repeated splits)</th><th>Test MAE (log units)</th><th>Train R²</th><th>Grouped-CV R² (train part)</th><th>Tuning</th><th>Best params</th></tr></thead><tbody>${cmpRows.map(r=>`<tr class="${r.key===m?"hl":""}"><td><b>${esc(r.name)}</b> ${r.key===m?'<span class="badge PASS">selected model</span>':""}</td><td><b>${fmt(r.R2)}</b></td><td>${r.R2_avg!=null?fmt(r.R2_avg)+" ± "+fmt(r.R2_avg_std,2)+' <span class="small">('+r.n_splits+" splits)</span>":"–"}</td><td>${fmt(r.MAE)}</td><td>${fmt(r.train_R2)}</td><td>${fmt(r.cv_R2)} ± ${fmt(r.cv_R2_std,2)}</td><td class="small">${esc(r.search)}</td><td class="small">${esc(JSON.stringify(r.params))}</td></tr>`).join("")}</tbody></table></div>
+  <div class="card"><h3>Model comparison</h3><div class="tw"><table><thead><tr><th>Model</th><th>Test R²</th><th>Test R² (avg of repeated splits)</th><th>Test MAE (${UNITS.LOGK})</th><th>Train R²</th><th>Grouped-CV R² (train part)</th><th>Tuning</th><th>Best params</th></tr></thead><tbody>${cmpRows.map(r=>`<tr class="${r.key===m?"hl":""}"><td><b>${esc(r.name)}</b> ${r.key===m?'<span class="badge PASS">selected model</span>':""}</td><td><b>${fmt(r.R2)}</b></td><td>${r.R2_avg!=null?fmt(r.R2_avg)+" ± "+fmt(r.R2_avg_std,2)+' <span class="small">('+r.n_splits+" splits)</span>":"–"}</td><td>${fmt(r.MAE)}</td><td>${fmt(r.train_R2)}</td><td>${fmt(r.cv_R2)} ± ${fmt(r.cv_R2_std,2)}</td><td class="small">${esc(r.search)}</td><td class="small">${esc(JSON.stringify(r.params))}</td></tr>`).join("")}</tbody></table></div>
 </div>
   ${relCard(src)}`}
  return `<h2>Model Training</h2>${stats}${extra}
@@ -384,23 +384,30 @@ P.performance=()=>{if(!S.ds)return $("#main").innerHTML=need();const t=S.ds.trai
 // ---- Screening Results tab ----
 
 // ---------- Cost filter helpers ----------
+const mn2=v=>(+v).toFixed(2).replace("-","−");
+const ruleText=(x,s)=>{const L=s.limits||{},B=L.tec!=null;
+ if(x.key==="tec")return`predicted TEC ≤ ${L.tec??15} ${UNITS.TEC}`;
+ if(x.key==="orr")return`predicted log10(k*) ≥ ${mn2(L.orr??-6.4)} ${UNITS.LOGK}`;
+ if(x.key==="ehull")return`${B?"predicted ":""}Ehull ≤ ${L.ehull??57} ${UNITS.EH}`;
+ if(x.key==="ad")return"Mahalanobis distance ≤ AD threshold";
+ return x.rule||""};
 const funnelHtml=s=>{const f=s.funnel;if(!f||!f.length)return"";const top=Math.max(1,f[0].entered);
  return`<div class="card funnel">${f.map((x,i)=>{const w=x.passed?Math.max(1.5,100*x.passed/top):0;
-  return`<div class="fn-row"><div class="fn-l"><b>${esc(x.label)}</b><small>${esc(x.rule||"")}</small></div><div class="fn-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="fn-n"><b>${x.passed}</b></div></div>`}).join("")}</div>`};
+  return`<div class="fn-row"><div class="fn-l"><b>${esc(x.label)}</b><small>${esc(ruleText(x,s))}</small></div><div class="fn-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="fn-n"><b>${x.passed}</b></div></div>`}).join("")}</div>`};
 const costArgs=(res,idx,ci)=>{ci=ci||{};
  if(res==="NOT AVAILABLE"&&idx==null)return["not available","",esc(ci.reason||ci.note||"No price available"),null];
  const mar=ci.rank?`rank ${ci.rank} of ${ci.n_priced}`:"";
  return[`≈ ${usd(idx)}${lvl[res]?" · "+lvl[res]:""}`,"",mar||(res==="NOT AVAILABLE"&&ci.note?esc(ci.note):""),null]};
 const costTable=ci=>{if(!ci||!ci.parts||!ci.parts.length)return ci&&ci.missing&&ci.missing.length?`<h3 style="margin-top:16px">Cost breakdown</h3><div class="note">No price for <b>${ci.missing.map(esc).join(", ")}</b>.</div>`:"";
  return`<h3 style="margin-top:16px">Cost breakdown</h3>
-  <div class="tw"><table class="cbt"><thead><tr><th>Element</th><th>Stoich.</th><th>Precursor</th><th>Moles needed</th><th>Mass needed (g)</th><th>Price (USD/kg)</th><th>Cost (USD)</th><th>Share</th></tr></thead><tbody>${ci.parts.map(p=>`<tr><td><b>${esc(p.element)}</b></td><td>${fmt(p.n,3)}</td><td>${esc(p.precursor)}${p.excess_pct?` <small class="muted">(+${p.excess_pct} % excess)</small>`:""}${p.source==="admin"?' <small class="muted">(admin price)</small>':""}</td><td>${fmt(p.mol_precursor,4)}</td><td>${fmt(p.mass_g,4)}</td><td>${fmt(p.norm_price_kg,4)}</td><td>${fmt(p.cost,4)}</td><td>${fmt(p.share*100,1)} %</td></tr>`).join("")}</tbody><tfoot><tr><td colspan="6"><b>Total per mole of cathode</b></td><td colspan="2"><b>$${fmt(ci.cost_per_mol,4)}</b></td></tr><tr><td colspan="6"><b>Estimated cost per kg of cathode</b></td><td colspan="2"><b>${usd(ci.index)}</b></td></tr></tfoot></table></div>`};
+  <div class="tw"><table class="cbt"><thead><tr><th>Element</th><th>Stoich.</th><th>Precursor</th><th>Moles needed <small>(mol)</small></th><th>Mass needed <small>(g)</small></th><th>Price <small>(USD/kg)</small></th><th>Cost (USD)</th><th>Share</th></tr></thead><tbody>${ci.parts.map(p=>`<tr><td><b>${esc(p.element)}</b></td><td>${fmt(p.n,3)}</td><td>${esc(p.precursor)}${p.excess_pct?` <small class="muted">(+${p.excess_pct} % excess)</small>`:""}${p.source==="admin"?' <small class="muted">(admin price)</small>':""}</td><td>${fmt(p.mol_precursor,4)}</td><td>${fmt(p.mass_g,4)}</td><td>${fmt(p.norm_price_kg,4)}</td><td>${fmt(p.cost,4)}</td><td>${fmt(p.share*100,1)} %</td></tr>`).join("")}</tbody><tfoot><tr><td colspan="6"><b>Total per mole of cathode</b></td><td colspan="2"><b>$${fmt(ci.cost_per_mol,4)}</b></td></tr><tr><td colspan="6"><b>Estimated cost per kg of cathode</b></td><td colspan="2"><b>${usd(ci.index)}</b></td></tr></tfoot></table></div>`};
 
 // ---------- Best in category (among the PASS cathodes) ----------
 const bestHtml=b=>{if(!b)return"";
  const cards=b.categories.map(c=>{
   if(!c.available)return`<div class="bc off"><div class="bc-t">${esc(c.title)}</div><div class="bc-f">—</div></div>`;
   const w=c.winner,tie=c.ties&&c.ties.length;
-  const vals=[["Ehull",w.ehull==null?"—":fmt(w.ehull,2)+" meV/atom"],["Est. cost",w.cost==null?"—":usd(w.cost)],["log10(k*)",fmt(w.log_k,2)]];
+  const vals=[["Ehull",w.ehull==null?"—":fmt(w.ehull,2)+" meV/atom"],["Est. cost",w.cost==null?"—":usd(w.cost)],["log10(k*)",fmt(w.log_k,2)+" "+UNITS.LOGK]];
   if(c.key==="balanced")vals.push(["Rank-sum",w.rank_sum+" ("+Object.entries(w.ranks).map(([k,v])=>k+" #"+v).join(", ")+")"]);
   return`<div class="bc click" onclick="detail(${w.id})"><div class="bc-t">${esc(c.title)}</div><div class="bc-f">${esc(w.formula)}${tie?` <span class="badge MODERATE" title="${esc(c.ties.join(", "))}">tie +${c.ties.length}</span>`:""}</div>
    <dl class="bc-v">${vals.map(v=>`<dt>${v[0]}</dt><dd>${v[1]}</dd>`).join("")}</dl></div>`}).join("");
@@ -420,7 +427,7 @@ P.results=async()=>{
   const s=S.ds.summary;
   if(!s)return $("#main").innerHTML='<div class="note">Not screened yet – open <a href="#" onclick="go(\'performance\');return false">Model Training</a>.</div>';
   const B=isBatch(s);
-  const opts=B?[["all","All cathodes"],["pass","PASS"],["fail","FAIL"],["incomplete","Not evaluable"],["failed_tec","Failed TEC"],["failed_orr","Failed log10(k*)"],["failed_ehull","Failed Ehull"]]:[["all","Results of all cathodes"],["test","Results of test cathodes (40%)"],["train","Results of training cathodes (60%)"]];
+  const opts=B?[["all","All cathodes"],["pass","PASS"],["fail","FAIL"],["incomplete","Not evaluable"],["failed_tec",`Failed TEC (> ${(s.limits||{}).tec??15} ${UNITS.TEC})`],["failed_orr",`Failed log10(k*) (< ${mn2((s.limits||{}).orr??-6.4)} ${UNITS.LOGK})`],["failed_ehull",`Failed Ehull (> ${(s.limits||{}).ehull??57} ${UNITS.EH})`]]:[["all","Results of all cathodes"],["test","Results of test cathodes (40%)"],["train","Results of training cathodes (60%)"]];
   $("#main").innerHTML=`<div class="ph"><div><h2>Screening Results</h2></div>${S.ds.train?`<button class="btn sec sm" onclick="S.model=S.ds.summary.model;go('performance')">Model details</button>`:""}</div>
    <div class="grid g4">${stat(s.total,"Total cathodes")}${stat(s.PASS,"PASS","p")}${stat(s.FAIL,"FAIL","f")}${s.INCOMPLETE?stat(s.INCOMPLETE,"Not evaluable","n"):""}${stat(s.pass_pct+"%","Pass rate")}</div>
    ${!B&&!s.ehull_available?'<div class="note bad">Ehull is <span class="na">not available</span> in this dataset.</div>':""}
@@ -428,8 +435,8 @@ P.results=async()=>{
    <div id="best"></div>
    <div class="sec-t">Cathode ranking</div>
    <div class="card flush">
-        <div class="tool"><input id="q" placeholder="Search formula…" value="${esc(S.q)}"><select id="rf" style="max-width:300px;margin:0">${opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>
-    <div class="tw"><table><thead>${B?'<tr><th>Rank</th><th>Cathode / Formula</th><th>TEC <small>(×10⁻⁶ K⁻¹)</small></th><th>log10(k*)</th><th>Ehull <small>(meV/atom)</small></th><th>Cost</th><th>Final</th></tr>':'<tr><th>Rank</th><th>Cathode / Formula</th><th>Predicted log10(k*)</th><th>Cost level</th><th>Final</th></tr>'}</thead><tbody id="tb"></tbody></table></div>
+        <div class="tool"><input id="q" placeholder="Search formula…" value="${esc(S.q)}"><select id="rf" style="max-width:360px;margin:0">${opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>
+    <div class="tw"><table><thead>${B?'<tr><th>Rank</th><th>Cathode / Formula</th><th>TEC <small>(×10⁻⁶ K⁻¹)</small></th><th>log10(k*) <small>('+UNITS.LOGK+')</small></th><th>Ehull <small>(meV/atom)</small></th><th>Cost</th><th>Final</th><th>Files</th></tr>':'<tr><th>Rank</th><th>Cathode / Formula</th><th>Predicted log10(k*) <small>('+UNITS.LOGK+')</small></th><th>Cost level</th><th>Final</th><th>Files</th></tr>'}</thead><tbody id="tb"></tbody></table></div>
     <p class="small muted" id="cnt" style="padding:10px 20px;margin:0"></p>
    </div>
 `;
@@ -443,7 +450,7 @@ async function loadRes(){
   const r=await api(`/datasets/${S.ds.id}/results?filter=${S.filter}&q=${encodeURIComponent(S.q)}`),B=isBatch(S.ds.summary);
   document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.k===S.filter));
   const bad=(res,v,d)=>`<td class="${res==="FAIL"?"vf":""}">${fmt(v,d)}</td>`;
-  $("#tb").innerHTML=r.map(x=>`<tr class="click t-${x.tier}${x.id===S.selId?" sel":""}" data-id="${x.id}" tabindex="0" onclick="detail(${x.id})" onkeydown="if(event.key==='Enter')detail(${x.id})"><td><b>#${x.rank}</b></td><td><a class="flink">${esc(x.formula)}</a></td>${B?`${bad(x.tec_result,x.tec,2)}${bad(x.orr_result,x.predicted_log_kstar,2)}${bad(x.ehull_result,x.ehull,1)}<td>${costCell(x)}</td>`:`<td>${fmt(x.predicted_log_kstar,2)}</td><td>${costCell(x)}</td>`}<td>${badge(x.final_result)}</td></tr>`).join("");
+  $("#tb").innerHTML=r.map(x=>`<tr class="click t-${x.tier}${x.id===S.selId?" sel":""}" data-id="${x.id}" tabindex="0" onclick="detail(${x.id})" onkeydown="if(event.key==='Enter')detail(${x.id})"><td><b>#${x.rank}</b></td><td><a class="flink">${esc(x.formula)}</a></td>${B?`${bad(x.tec_result,x.tec,2)}${bad(x.orr_result,x.predicted_log_kstar,2)}${bad(x.ehull_result,x.ehull,1)}<td>${costCell(x)}</td>`:`<td>${fmt(x.predicted_log_kstar,2)}</td><td>${costCell(x)}</td>`}<td>${badge(x.final_result)}</td><td class="files" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">${B&&x.final_result!=="INCOMPLETE"?`<button type="button" class="btn sm sec" title="Open the report of ${esc(x.formula)} (can be saved as PDF)" onclick="openReport(${x.id})">Report</button> `:""}<button type="button" class="btn sm sec" title="View the .cif file of ${esc(x.formula)}" onclick="viewCif(${x.id})">.cif</button></td></tr>`).join("");
   $("#cnt").textContent=r.length+" cathodes shown";
 }
 
@@ -458,21 +465,21 @@ const dhtml=x=>{
  const chk=(ti,res,val,req,margin,pct)=>`<div class="chk ${String(res).replace(/ /g,"")}"><div class="t"><span>${ti}</span>${badge(res)}</div><div class="v">${val}</div>${req?`<div class="r">Requirement: ${req}</div>`:""}${margin?`<div class="r">${margin}</div>`:""}${pct!=null?`<div class="gauge"><i style="width:${Math.min(100,pct)}%;background:${res==="PASS"?"var(--pass)":"var(--fail)"}"></i></div>`:""}</div>`;
  return `<div class="dh"><div><h2>${esc(x.formula)}</h2><div class="sub">Screening result</div></div><div class="verdict ${f}">${f==="INCOMPLETE"?"NOT EVALUABLE":f}</div></div>
  ${expl}
- <h3>Screening values</h3><div class="checks">${chk("Applicability domain",x.ad_result,x.applicability_domain+" · distance "+dist,`distance ≤ ${fmt(t.ad,2)}`,"",Math.min(100,adR*100))}${chk("Ehull (stability)",x.ehull_result,e==null?"—":fmt(e,1)+" meV/atom",`≤ ${t.ehull} meV/atom`,e==null?"Not available in dataset":(ehM>=0?`${fmt(ehM,1)} below the limit`:`${fmt(-ehM,1)} above the limit`),e==null?null:e/t.ehull*100)}${chk("ORR activity",x.orr_result,"log10(k*) "+fmt(p,2),`≥ ${t.orr} (LSC benchmark)`,(orrM>=0?`${fmt(orrM,2)} above the benchmark`:`${fmt(-orrM,2)} below the benchmark`)+` · k* = ${fmt(k)} cm/s`,Math.max(0,Math.min(100,100+orrM*50)))}${chk("Estimated cost (precursors)",x.cost_result,...costArgs(x.cost_result,x.cost,ci))}</div>${costTable(ci)}`};
+ <h3>Screening values</h3><div class="checks">${chk("Applicability domain",x.ad_result,x.applicability_domain+" · distance "+dist,`distance ≤ ${fmt(t.ad,2)}`,"",Math.min(100,adR*100))}${chk("Ehull (stability)",x.ehull_result,e==null?"—":fmt(e,1)+" meV/atom",`≤ ${t.ehull} meV/atom`,e==null?"Not available in dataset":(ehM>=0?`${fmt(ehM,1)} meV/atom below the limit`:`${fmt(-ehM,1)} meV/atom above the limit`),e==null?null:e/t.ehull*100)}${chk("ORR activity",x.orr_result,"log10(k*) "+fmt(p,2)+" "+UNITS.LOGK,`≥ ${t.orr} ${UNITS.LOGK} (LSC benchmark)`,(orrM>=0?`${fmt(orrM,2)} ${UNITS.LOGK} above the benchmark`:`${fmt(-orrM,2)} ${UNITS.LOGK} below the benchmark`)+` · k* = ${fmt(k)} cm/s`,Math.max(0,Math.min(100,100+orrM*50)))}${chk("Estimated cost (precursors)",x.cost_result,...costArgs(x.cost_result,x.cost,ci))}</div>${costTable(ci)}`};
 const SRCL={formula:"calculated from formula",dataset:"from dataset",predicted:"predicted (SVR)",temperature:"from temperature"};
 const dhtmlB=x=>{
  const d=x.detail,ci=d.cost||{},t=d.thresholds,f=x.final_result,e=x.ehull,tc=x.tec,p=x.orr_value,k=x.predicted_kstar,fails=[];
  if(x.tec_result==="FAIL")fails.push("TEC");if(x.orr_result==="FAIL")fails.push("log10(k*)");if(x.ehull_result==="FAIL")fails.push("Ehull");
  const expl=f==="FAIL"?`<div class="expl bad">Failed: ${fails.join(", ")}</div>`:f==="INCOMPLETE"&&d.not_available.length?`<div class="expl">${d.not_available.map(esc).join(" ")}</div>`:"";
  const chk=(ti,res,val,req,margin,pct)=>`<div class="chk ${String(res).replace(/ /g,"")}"><div class="t"><span>${ti}</span>${badge(res)}</div><div class="v">${val}</div>${req?`<div class="r">${req}</div>`:""}${margin?`<div class="r">${margin}</div>`:""}${pct!=null?`<div class="gauge"><i style="width:${Math.min(100,pct)}%;background:${res==="PASS"?"var(--pass)":res==="FAIL"?"var(--fail)":"#9fb3c8"}"></i></div>`:""}</div>`;
- const side=(v,lim,lo,hi)=>v==null?"":v<=lim?`${fmt(lim-v,2)} below the limit`:`${fmt(v-lim,2)} above the limit`;
+ const side=(v,lim,u)=>v==null?"":v<=lim?`${fmt(lim-v,2)} ${u} below the limit`:`${fmt(v-lim,2)} ${u} above the limit`;
  const orrM=p==null?null:p-t.orr;
  const feats=d.features||{},src=d.sources||{},nm=Object.fromEntries(DESC_UI.map(r=>[r[0],r[2]]));
- const inputs=Object.keys(feats).length?`<details class="inp"><summary>Model inputs (${Object.keys(feats).length}) &ndash; where each value came from · ${+(+d.temperature_c).toFixed(2)} °C</summary><div class="tw"><table class="cbt"><thead><tr><th>Input</th><th>Value</th><th>Source</th></tr></thead><tbody>${Object.keys(feats).map(c=>`<tr><td>${esc(nm[c]||c)} <small class="muted">${esc(c)}</small></td><td>${fmt(feats[c],4)}</td><td><span class="src ${esc(src[c]||"")}">${esc(SRCL[src[c]]||"")}</span></td></tr>`).join("")}</tbody></table></div></details>`:"";
+ const inputs=Object.keys(feats).length?`<details class="inp"><summary>Model inputs (${Object.keys(feats).length}) &ndash; where each value came from · ${+(+d.temperature_c).toFixed(2)} °C</summary><div class="tw"><table class="cbt"><thead><tr><th>Input</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>${Object.keys(feats).map(c=>`<tr><td>${esc(nm[c]||c)} <small class="muted">${esc(c)}</small></td><td>${fmt(feats[c],4)}</td><td>${esc(UNITS.unit(c))}</td><td><span class="src ${esc(src[c]||"")}">${esc(SRCL[src[c]]||"")}</span></td></tr>`).join("")}</tbody></table></div></details>`:"";
  const notes=(d.notes||[]).length?`<div class="small muted" style="margin:10px 0">${d.notes.map(n=>esc(n.t)).join("<br>")}</div>`:"";
  return `<div class="dh"><div><h2>${esc(x.formula)}</h2><div class="sub">Screening result at ${+(+d.temperature_c).toFixed(2)} °C</div></div><div class="verdict ${f}">${f==="INCOMPLETE"?"NOT EVALUABLE":f}</div></div>
  ${expl}
- <h3>Filters <small class="muted" style="text-transform:none;letter-spacing:0">&ndash; these decide PASS / FAIL</small></h3><div class="checks">${chk("Thermal expansion (TEC)",x.tec_result,tc==null?"—":fmt(tc,2)+" ×10<sup>-6</sup> K<sup>-1</sup>",`predicted ≤ ${t.tec} ×10<sup>-6</sup> K<sup>-1</sup>`,side(tc,t.tec),tc==null?null:tc/t.tec*100)}${chk("Activity, log10(k*)",x.orr_result,p==null?"—":"log10(k*) "+fmt(p,2),`predicted ≥ ${t.orr} (LSC benchmark)`,p==null?"":(orrM>=0?`${fmt(orrM,2)} above the benchmark`:`${fmt(-orrM,2)} below the benchmark`)+` · k* = ${fmt(k)} cm/s`,p==null?null:Math.max(0,Math.min(100,100+orrM*50)))}${chk("Stability, Ehull",x.ehull_result,e==null?"—":fmt(e,1)+" meV/atom",`predicted ≤ ${t.ehull} meV/atom`,side(e,t.ehull),e==null?null:e/t.ehull*100)}</div>
+ <h3>Filters <small class="muted" style="text-transform:none;letter-spacing:0">&ndash; these decide PASS / FAIL</small></h3><div class="checks">${chk("Thermal expansion (TEC)",x.tec_result,tc==null?"—":fmt(tc,2)+" ×10<sup>-6</sup> K<sup>-1</sup>",`predicted ≤ ${t.tec} ×10<sup>-6</sup> K<sup>-1</sup>`,side(tc,t.tec,UNITS.TEC),tc==null?null:tc/t.tec*100)}${chk("Activity, log10(k*)",x.orr_result,p==null?"—":"log10(k*) "+fmt(p,2)+" "+UNITS.LOGK,`predicted ≥ ${t.orr} ${UNITS.LOGK} (LSC benchmark)`,p==null?"":(orrM>=0?`${fmt(orrM,2)} ${UNITS.LOGK} above the benchmark`:`${fmt(-orrM,2)} ${UNITS.LOGK} below the benchmark`)+` · k* = ${fmt(k)} cm/s`,p==null?null:Math.max(0,Math.min(100,100+orrM*50)))}${chk("Stability, Ehull",x.ehull_result,e==null?"—":fmt(e,1)+" meV/atom",`predicted ≤ ${t.ehull} meV/atom`,side(e,t.ehull,UNITS.EH),e==null?null:e/t.ehull*100)}</div>
  <h3 style="margin-top:18px">For information <small class="muted" style="text-transform:none;letter-spacing:0">&ndash; do not change PASS / FAIL</small></h3><div class="checks">${chk("Applicability domain","INFO",x.applicability_domain?(x.applicability_domain==="INSIDE"?"Inside":"Outside")+" · distance "+fmt(x.mahalanobis_distance,2):"—",`distance ≤ ${fmt(t.ad,2)}`,"",null)}${chk("Estimated cost (precursors)","",...costArgs(x.cost_result,x.cost,ci))}</div>
  ${notes}${inputs}${costTable(ci)}`};
 /* ================= 3D crystal-structure viewer (3Dmol.js) =================
@@ -578,8 +585,8 @@ function v3Panel(x){
  const p=v3Parse(x.formula),o=(x.detail&&x.detail.original)||{};
  const pick=re=>{const k=Object.keys(o).find(k=>re.test(k.replace(/[^a-z]/gi,"")));const v=k==null?NaN:parseFloat(o[k]);return Number.isFinite(v)?v:null};
  const logk=x.orr_value!=null?x.orr_value:x.predicted_log_kstar;
- const rows=[["Rank","#"+(x.rank??"—")],["Predicted log10(k*)",fmt(logk,2)],["Predicted k*",fmt(x.predicted_kstar)+" cm/s"],["Ehull",x.ehull==null?"—":fmt(x.ehull,1)+" meV/atom"],["Est. precursor cost",usd(x.cost)+(lvl[x.cost_result]?" · "+lvl[x.cost_result]:"")]];
- [["TEC",/^tec$/i],["O p-band center",/^opband/i],["Band gap",/^(gap|bandgap)$/i],["Work function",/^workfunction$/i],["O-vacancy energy",/^(oxidevacancy|ovacancy)/i]].forEach(([n,re])=>{const v=pick(re);if(v!=null)rows.push([n,fmt(v,3)])});
+ const rows=[["Rank","#"+(x.rank??"—")],["Predicted log10(k*)",fmt(logk,2)+" "+UNITS.LOGK],["Predicted k*",fmt(x.predicted_kstar)+" cm/s"],["Ehull",x.ehull==null?"—":fmt(x.ehull,1)+" meV/atom"],["Est. precursor cost",usd(x.cost)+(lvl[x.cost_result]?" · "+lvl[x.cost_result]:"")]];
+ [["TEC",/^tec$/i,UNITS.TEC],["O p-band center",/^opband/i,"eV"],["Band gap",/^(gap|bandgap)$/i,"eV"],["Work function",/^workfunction$/i,"eV"],["O-vacancy energy",/^(oxidevacancy|ovacancy)/i,"eV"]].forEach(([n,re,u])=>{const v=pick(re);if(v!=null)rows.push([n,fmt(v,3)+" "+u])});
  rows.push(["Final result",badge(x.final_result)]);
  let leg="",note="";
  if(p){
@@ -590,7 +597,7 @@ function v3Panel(x){
  }else leg='<div class="v3-li"><span>Could not read the formula as ABO₃.</span></div>';
  return`<div class="v3"><div class="v3-h">Crystal structure<small>Pseudo-cubic ABO₃ unit cell · drag to rotate, scroll to zoom</small></div>
   <div class="v3-slot" id="v3slot"><div class="v3-msg">${v3Spin("Loading 3D viewer…")}</div></div>
-  <div class="v3-bar"><button class="btn sec sm" id="v3spin">Pause</button><button class="btn sec sm" id="v3reset">Reset view</button><button class="btn sec sm" id="v3dl">Download .xyz</button></div>
+  <div class="v3-bar"><button class="btn sec sm" id="v3spin">Pause</button><button class="btn sec sm" id="v3reset">Reset view</button><button class="btn sec sm" id="v3dl">Download .xyz</button><button class="btn sec sm" onclick="viewCif(S.selId)">View .cif</button></div>
   <div class="v3-leg">${leg}</div>${note?`<p class="v3-note">${note}</p>`:""}
   <table class="v3-props">${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table></div>`;
 }
@@ -694,7 +701,7 @@ window.detail=async id=>{
    orr_result:x.orr_result,ehull:x.ehull,ehull_result:x.ehull_result,tec:x.tec,tec_result:x.tec_result,cost:x.cost,cost_result:x.cost_result,cost_info:d.cost||{},
    ad:x.applicability_domain,dist:x.mahalanobis_distance,ad_result:x.ad_result,thresholds:d.thresholds,not_available:d.not_available||[],full:true};
   const t=d.temperature_c!=null?+(+d.temperature_c).toFixed(2):null;
-  $("#mbody").innerHTML=`<div class="rsmod"><div class="rsmod-bar"><span class="rsmod-rank">Rank <b>#${x.rank??"—"}</b></span>${t!=null?`<span class="rsmod-temp">Screened at <b>${t} °C</b></span>`:""}</div>${predHtml(o)}${screenInputs(d)}</div>`;
+  $("#mbody").innerHTML=`<div class="rsmod"><div class="rsmod-bar"><span class="rsmod-rank">Rank <b>#${x.rank??"—"}</b></span>${t!=null?`<span class="rsmod-temp">Screened at <b>${t} °C</b></span>`:""}<span class="rsmod-files">${x.final_result!=="INCOMPLETE"?`<button type="button" class="btn sm sec" onclick="openReport(${x.id})">Report</button> `:""}<button type="button" class="btn sm sec" onclick="viewCif(${x.id})">View .cif</button></span></div>${predHtml(o)}${screenInputs(d)}</div>`;
   $(".mbox").classList.remove("wide");
  }else{                                                             // older train-on-upload results keep the previous layout
   $("#mbody").innerHTML=`<div class="dmod">${v3Panel(x)}<div class="dmain">${dhtml(x)}</div></div>`;
@@ -708,7 +715,7 @@ const screenInputs=d=>{
  const feats=d.features||{},src=d.sources||{},nm=Object.fromEntries(DESC_UI.map(r=>[r[0],r[2]])),n=Object.keys(feats).length;
  const notes=(d.notes||[]).length?`<div class="small muted" style="margin:10px 0">${d.notes.map(n=>esc(n.t)).join("<br>")}</div>`:"";
  if(!n)return notes;
- return`${notes}<details class="inp"><summary>Model inputs (${n}) &ndash; where each value came from · ${+(+d.temperature_c).toFixed(2)} °C</summary><div class="tw"><table class="cbt"><thead><tr><th>Input</th><th>Value</th><th>Source</th></tr></thead><tbody>${Object.keys(feats).map(c=>`<tr><td>${esc(nm[c]||c)} <small class="muted">${esc(c)}</small></td><td>${fmt(feats[c],4)}</td><td><span class="src ${esc(src[c]||"")}">${esc(SRCL[src[c]]||"")}</span></td></tr>`).join("")}</tbody></table></div></details>`};
+ return`${notes}<details class="inp"><summary>Model inputs (${n}) &ndash; where each value came from · ${+(+d.temperature_c).toFixed(2)} °C</summary><div class="tw"><table class="cbt"><thead><tr><th>Input</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody>${Object.keys(feats).map(c=>`<tr><td>${esc(nm[c]||c)} <small class="muted">${esc(c)}</small></td><td>${fmt(feats[c],4)}</td><td>${esc(UNITS.unit(c))}</td><td><span class="src ${esc(src[c]||"")}">${esc(SRCL[src[c]]||"")}</span></td></tr>`).join("")}</tbody></table></div></details>`};
 // ---------- Predict a single cathode: result panel (matches the LaCoO3 dashboard mock-up) ----------
 const RI=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const RIC={
@@ -728,10 +735,10 @@ const rsInfo=(ico,name,sub,val,note)=>`<div class="rs-i"><span class="rs-ii">${R
 const predCostTable=ci=>{
  if(!ci||!ci.parts||!ci.parts.length)return ci&&ci.missing&&ci.missing.length?`<div class="rs-box"><div class="rs-sec"><span>${RIC.bars}</span>Cost breakdown</div><div class="note">No price for <b>${ci.missing.map(esc).join(", ")}</b>.</div></div>`:"";
  return`<div class="rs-box"><div class="rs-sec"><span>${RIC.bars}</span>Cost breakdown</div>
- <div class="rs-tw"><table class="rs-cost"><thead><tr><th>Element</th><th>Precursor</th><th>Mass (g)</th><th>Price (USD/kg)</th><th>Cost (USD)</th><th>Share</th></tr></thead><tbody>${ci.parts.map(p=>`<tr><td>${esc(p.element)}</td><td>${esc(p.precursor)}${p.excess_pct?` <small>(+${p.excess_pct}%)</small>`:""}</td><td>${fmt(p.mass_g,3)}</td><td>${fmt(p.norm_price_kg,2)}</td><td>${fmt(p.cost,3)}</td><td>${fmt(p.share*100,1)}%</td></tr>`).join("")}</tbody><tfoot><tr><td colspan="4">Total per mole of cathode</td><td colspan="2">$${fmt(ci.cost_per_mol,3)}</td></tr><tr><td colspan="4">Estimated cost per kg of cathode</td><td colspan="2">${usd(ci.index)}</td></tr></tfoot></table></div></div>`};
+ <div class="rs-tw"><table class="rs-cost"><thead><tr><th>Element</th><th>Precursor</th><th>Mass <small>(g)</small></th><th>Price <small>(USD/kg)</small></th><th>Cost (USD)</th><th>Share</th></tr></thead><tbody>${ci.parts.map(p=>`<tr><td>${esc(p.element)}</td><td>${esc(p.precursor)}${p.excess_pct?` <small>(+${p.excess_pct}%)</small>`:""}</td><td>${fmt(p.mass_g,3)}</td><td>${fmt(p.norm_price_kg,2)}</td><td>${fmt(p.cost,3)}</td><td>${fmt(p.share*100,1)}%</td></tr>`).join("")}</tbody><tfoot><tr><td colspan="4">Total per mole of cathode</td><td colspan="2">$${fmt(ci.cost_per_mol,3)}</td></tr><tr><td colspan="4">Estimated cost per kg of cathode</td><td colspan="2">${usd(ci.index)}</td></tr></tfoot></table></div></div>`};
 const predSummary=o=>{
  const t=o.thresholds,f=o.final,fails=[];
- if(o.orr_result==="FAIL")fails.push(`log10(K*) is below ${+t.orr}`);
+ if(o.orr_result==="FAIL")fails.push(`log10(K*) is below ${+t.orr} ${UNITS.LOGK}`);
  if(o.ehull_result==="FAIL")fails.push(`Ehull is above ${t.ehull} meV/atom`);
  if(o.tec_result==="FAIL")fails.push(`TEC is above ${t.tec} ×10⁻⁶ K⁻¹`);
  if(o.ad_result==="FAIL"&&!o.full)fails.push("it lies outside the applicability domain");
@@ -740,8 +747,8 @@ const predSummary=o=>{
  return(o.not_available||[]).length?o.not_available.map(esc).join(" "):`${esc(o.formula)} could not be fully evaluated.`};
 const predHtml=o=>{
  const t=o.thresholds,f=o.final,e=o.ehull,na=o.cost==null;
- return`<div class="card pres rs"><div class="rs-head"><div class="rs-id"><div class="rs-name">${subF(o.formula)}</div><span class="rs-big ${f}">${f==="PASS"?RIC.ok:f==="FAIL"?RIC.x:""}${f==="INCOMPLETE"?"NOT EVALUABLE":f}</span><p class="rs-subt">Cathode prediction results based on ML model</p></div><div class="rs-3d" id="v3slot" title="Drag to rotate"><div class="v3-msg">${v3Spin("Loading 3D…")}</div></div></div>
- <div class="rs-list">${rsMetric("trend","log10(K*)",o.orr_result,fmt(o.pred_log,2),`predicted ≥ ${+t.orr} (LSC benchmark)`)}${rsMetric("shield","EHull (stability)",o.ehull_result,e==null?"not entered":fmt(e,1)+" meV/atom",`predicted ≤ ${t.ehull} meV/atom`)}${o.tec!=null?rsMetric("therm","Thermal expansion (TEC)",o.tec_result,fmt(o.tec,2)+" ×10<sup>-6</sup> K<sup>-1</sup>",`predicted ≤ ${t.tec} ×10<sup>-6</sup> K<sup>-1</sup>`):""}</div>
+ return`<div class="card pres rs"><div class="rs-head"><div class="rs-id"><div class="rs-name">${subF(o.formula)}</div><span class="rs-big ${f}">${f==="PASS"?RIC.ok:f==="FAIL"?RIC.x:""}${f==="INCOMPLETE"?"NOT EVALUABLE":f}</span><p class="rs-subt">Cathode prediction results based on ML model</p>${o.pid!=null?`<div class="rs-files">${f!=="INCOMPLETE"?`<button type="button" class="btn sm sec" title="Open the report of ${esc(o.formula)} (can be saved as PDF)" onclick="openPredReport(${o.pid})">View report</button>`:""}<button type="button" class="btn sm sec" title="View the .cif file of ${esc(o.formula)}" onclick="viewPredCif(${o.pid})">view .cifile</button></div>`:""}</div><div class="rs-3d" id="v3slot" title="Drag to rotate"><div class="v3-msg">${v3Spin("Loading 3D…")}</div></div></div>
+ <div class="rs-list">${rsMetric("trend","log10(K*)",o.orr_result,fmt(o.pred_log,2)+" "+UNITS.LOGK,`predicted ≥ ${+t.orr} ${UNITS.LOGK} (LSC benchmark)`)}${rsMetric("shield","EHull (stability)",o.ehull_result,e==null?"not entered":fmt(e,1)+" meV/atom",`predicted ≤ ${t.ehull} meV/atom`)}${o.tec!=null?rsMetric("therm","Thermal expansion (TEC)",o.tec_result,fmt(o.tec,2)+" ×10<sup>-6</sup> K<sup>-1</sup>",`predicted ≤ ${t.tec} ×10<sup>-6</sup> K<sup>-1</sup>`):""}</div>
  <div class="rs-two">${rsInfo("coins","Estimated Cost","precursor cost",na?"not available":usd(o.cost),!na?(lvl[o.cost_result]||"level needs a screening"):((o.cost_info&&o.cost_info.reason)||""))}${rsInfo("cube","Applicability Domain",`distance ≤ ${fmt(t.ad,2)}`,o.ad==="INSIDE"?"Inside":"Outside","distance "+fmt(o.dist,2))}</div>
  ${predCostTable(o.cost_info)}
  <div class="rs-sum ${f}"><span>${RIC.info}</span>${predSummary(o)}</div></div>`};
@@ -767,6 +774,7 @@ const DESC_UI=[
 ["Avg_Ionic_Character","Avg_IC","Average ionic character"],
 ["SmithAcid_A","SA_A","Smith Acidity of A-site"],
 ["SmithAcid_B","SA_B","Smith Acidity of B-site"],
+["Density","ρ","Density (estimated from formula)"],
 ["Work_Function","WF","Work function"],
 ["O_pband","O-p","O-p band center radius"],
 ["Log_dieletric","log ε","log dielectric constant"],
@@ -775,7 +783,8 @@ const DESC_UI=[
 ["_x1","σ_ion","Bulk ionic conductivity"],
 ["_x2","σ_total","Total electronic conductivity"],
 ["_x4","ASR","Area-specific resistance (ASR)"]];
-const descField=(st,cur,sec)=>([k,sn,full])=>{const s=st[k]||{};const live=cur().features.includes(k);return `<label class="fld"><span class="fl-k">${esc(sn)}</span><span class="fl-l">${esc(full)}</span><input type="number" step="any" ${live?`data-f="${esc(k)}"`:`data-x="${esc(sn)}"`}${sec?` data-sec="${sec}"`:""} placeholder="${s.median!=null&&sec?"e.g. "+fmt(s.median,3):"value"}"></label>`};
+const unitSpan=k=>{const u=UNITS.unit(k);return u?` <span class="fl-u">(${esc(u)})</span>`:""};
+const descField=(st,cur,sec)=>([k,sn,full])=>{const s=st[k]||{};const live=cur().features.includes(k);return `<label class="fld"><span class="fl-k">${esc(sn)}</span><span class="fl-l">${esc(full)}${unitSpan(k)}</span><input type="number" step="any" ${live?`data-f="${esc(k)}"`:`data-x="${esc(sn)}"`}${sec?` data-sec="${sec}"`:""} placeholder="${s.median!=null&&sec?"e.g. "+fmt(s.median,3):"value"}"></label>`};
 /* Predict button gate: enabled only after after "Predict using SVR" or "Fill with typical values"
    were pressed for the CURRENT formula / doping / temperature, and every model input is filled. Any change to formula, doping or temperature resets it. */
 const PG={sig:null,desc:null,other:null,timer:null};
@@ -795,7 +804,7 @@ function pgInit(){
  PG.desc=PG.other=null;clearInterval(PG.timer);
  const root=$("#pgrid");if(!root)return;
  ["input","change","click"].forEach(ev=>root.addEventListener(ev,()=>setTimeout(pgUpdate,0)));
- PG.auto=null;PG.timer=setInterval(()=>{if(!$("#pbtn")){clearInterval(PG.timer);return}autoDesc();pgUpdate()},250);
+ PG.auto=null;PG.timer=setInterval(()=>{if(!$("#pbtn")){clearInterval(PG.timer);return}autoDesc();autoKnown();pgUpdate()},250);
  pgUpdate()}
 /* descriptors fill automatically (and keep updating) as the cathode formula / doping rows change; values stay editable by hand
    until the cathode itself changes again. */
@@ -804,12 +813,33 @@ window.autoDesc=()=>{
  const c=FX.composition(),ok=!!(c&&c.A.length&&c.B.length),key=ok?JSON.stringify([c.A,c.B]):"";
  if(key===PG.auto)return;PG.auto=key;
  const inputs=document.querySelectorAll("#pf_grid [data-f]");
- if(!ok){inputs.forEach(i=>{i.value="";i.classList.remove("calc")});note.className="desc-note";note.textContent="";return}
+ const dens=document.querySelector('#pf_grid [data-x="ρ"]');
+ if(!ok){inputs.forEach(i=>{i.value="";i.classList.remove("calc")});if(dens){dens.value="";dens.classList.remove("calc")};note.className="desc-note";note.textContent="";return}
  const r=DESC_CALC.compute(c),n=Object.keys(r.values).length;
  inputs.forEach(i=>{const v=r.values[i.dataset.f];if(v!==undefined){i.value=v;i.classList.add("calc");i.oninput=()=>i.classList.remove("calc")}else{i.value="";i.classList.remove("calc")}});
+ if(dens){const d=r.values.Density;if(d!==undefined){dens.value=d;dens.classList.add("calc");dens.oninput=()=>dens.classList.remove("calc")}else{dens.value="";dens.classList.remove("calc")}}
  const miss=[...new Set([...r.unknownA,...r.unknownB])];
  note.className="desc-note"+(miss.length?" warn":"");
- note.textContent=(!n?"Nothing could be calculated.":"")+(miss.length?`No built-in data for ${miss.join(", ")} yet – type those fields in manually.`:"")+(r.approx?" Y and Zr values are exact only when both are present in equal amounts.":"")};
+ note.textContent=(!n?"Nothing could be calculated.":"")+(miss.length?`No built-in data for ${miss.join(", ")} yet – type those fields in manually.`:"")};
+/* A cathode that is in the training dataset AT THIS TEMPERATURE: its own descriptors + 5 properties are loaded and the dataset's recorded values are
+   reproduced on Predict (server side). No match (other formula or other temperature) -> everything works as before. */
+window.autoKnown=async()=>{
+ const note=$("#calcnote");if(!note||!window.FX||!FX.composition)return;
+ const c=FX.composition(),tv=$("#pf_t")?.value.trim(),ok=!!(c&&c.A.length&&c.B.length)&&tv!==""&&isFinite(+tv),key=ok?JSON.stringify([c.A,c.B,+tv]):"";
+ if(key===PG.kkey)return;PG.kkey=key;
+ const was=PG.known;
+ let j=null;if(ok){try{j=await api("/known",{json:{composition:c,temperature_c:+tv}})}catch(e){j=null}}
+ if(PG.kkey!==key)return;                                  /* the inputs changed while waiting */
+ if(j&&j.found){
+  Object.entries(j.values).forEach(([k,v])=>{const i=document.querySelector(`[data-f="${k}"]`);if(i){i.value=v;i.classList.add("calc");i.oninput=()=>i.classList.remove("calc")}});
+  PG.known=key;pgMark("other");
+  note.className="desc-note";
+  note.textContent="";
+ }else if(was){                                            /* no longer a dataset cathode at this temperature: back to the normal flow */
+  PG.known=null;PG.auto=null;
+  document.querySelectorAll("#pf_grid2 [data-f]").forEach(i=>{i.value="";i.classList.remove("calc")});
+  pgUpdate()}};
+
 P.predict=()=>{
  if(!S.ds||!$("#pmount"))return;if(VIEW)return P.predictHistory();const t=S.ds.train;
  if(!t)return $("#pmount").innerHTML='<div class="note">This dataset has not been trained yet.</div>';
@@ -821,11 +851,11 @@ P.predict=()=>{
    <div class="top-row"><div class="ac-wrap"><label>Cathode formula<input id="pf_name" placeholder="e.g. La0.6Sr0.4Fe0.9Ga0.1O3" maxlength="60" autocomplete="off" spellcheck="false"></label></div><div class="tb-col"><button type="button" class="btn sm sec vp-btn" id="vpbtn" onclick="togglePastPreds()">View predictions</button><div class="temp-box"><label class="fld"><span class="fl-k">Temperature</span><span class="fl-l">Operating temperature (&deg;C)</span><input type="number" step="any" id="pf_t" placeholder="e.g. 700"></label></div></div></div><div id="vppanel" class="vp-panel hidden"></div><div id="fx" class="hidden"></div>
    <div class="desc-line"></div>
    <h3 class="desc-h">Descriptors</h3>
-   <div class="fgrid" id="pf_grid">${DESC_UI.slice(0,15).map(descField(st,cur)).join("")}</div>
+   <div class="fgrid" id="pf_grid">${DESC_UI.slice(0,16).map(descField(st,cur)).join("")}</div>
    <div class="desc-act"><span id="calcnote" class="desc-note"></span></div>
    <div class="desc-line"></div>
    <h3 class="desc-h">Other features</h3>
-   <div class="fgrid" id="pf_grid2">${DESC_UI.slice(15).map(descField(st,cur,"o")).join("")}</div>
+   <div class="fgrid" id="pf_grid2">${DESC_UI.slice(16).map(descField(st,cur,"o")).join("")}</div>
    <div class="desc-act"><button type="button" class="btn sec" onclick="fillPred();pgMark('other')">Fill with typical values</button><button type="button" class="btn" id="svrbtn" onclick="predictProps()">Predict using SVR</button></div><div id="propnote" class="desc-note prop-note"></div>
       <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="pbtn" onclick="runPredict()" disabled>Predict</button><button class="btn sec" onclick="clearPred()">Clear</button></div><div id="predhint" class="desc-note prop-note" style="margin-top:8px"></div></div>
   <div id="predres" class="pred-res"></div></div>`;
@@ -844,11 +874,11 @@ window.ppDetail=i=>{const p=window._pp[i],r=p.result;
  if(p.full&&p.full.thresholds){   // the exact result page shown when the prediction was made
   const live=document.querySelector("#predres #v3slot");if(live)live.id="v3slot-live";   // the live result panel (right side) also has a #v3slot: rename it while the popup is open so the 3D view goes to the popup
   const ef=p.inputs&&p.inputs["Entered formula"],note=ef&&ef!==p.full.formula?`<div class="small muted" style="margin-bottom:8px">Entered formula: <b>${esc(ef)}</b> · identified as <b>${esc(p.full.formula)}</b></div>`:"";   // same note FX.annotate() adds on the live page
-  $("#mbody").innerHTML=`<div class="rsmod"><div class="rsmod-bar"><span class="rsmod-rank">${esc(p.model)}${p.dataset?" · "+esc(p.dataset):""}</span><span class="rsmod-temp">${esc(p.ago)}</span></div>${predHtml(p.full).replace('<div class="card pres rs">','<div class="card pres rs">'+note)}</div>`;
+  $("#mbody").innerHTML=`<div class="rsmod"><div class="rsmod-bar"><span class="rsmod-rank">${esc(p.model)}${p.dataset?" · "+esc(p.dataset):""}</span><span class="rsmod-temp">${esc(p.ago)}</span></div>${predHtml({...p.full,pid:p.id}).replace('<div class="card pres rs">','<div class="card pres rs">'+note)}</div>`;
   $(".mbox").classList.remove("wide");$("#modal").classList.remove("hidden");v3Mount({formula:p.full.formula});return}
- const kv=o=>`<div class="tw"><table><tbody>${Object.entries(o).map(([k,v])=>`<tr><td>${esc(k)}</td><td><b>${v==null?"—":typeof v==="number"?fmt(v):esc(v)}</b></td></tr>`).join("")}</tbody></table></div>`;
+ const kv=o=>`<div class="tw"><table><tbody>${Object.entries(o).map(([k,v])=>`<tr><td>${esc(UNITS.label(k))}</td><td><b>${v==null?"—":typeof v==="number"?fmt(v):esc(v)}</b></td></tr>`).join("")}</tbody></table></div>`;
  const inp={...p.inputs};if(inp["1000/T"]!=null&&isFinite(+inp["1000/T"])&&+inp["1000/T"]>0)inp["Temperature (°C)"]=+(1000/+inp["1000/T"]-273.15).toFixed(2);
- $("#mbody").innerHTML=`<h3>${esc(p.formula)} ${badge(r.final)}</h3><p class="muted small">${esc(p.model)}${p.dataset?" · "+esc(p.dataset):""} · ${esc(p.ago)}</p><h4>What you entered</h4>${kv(inp)}<h4 style="margin-top:14px">Result</h4>${kv({"Predicted log10(k*)":r.pred_log,"Predicted k* (cm/s)":r.pred_k,"Mahalanobis distance":r.dist,"Applicability domain":r.ad_result,"Ehull check":r.ehull_result,"ORR check":r.orr_result,"Est. cost":r.cost==null?null:usd(r.cost),"Cost level":r.cost_result,"Final":r.final})}`;$("#modal").classList.remove("hidden")};
+ $("#mbody").innerHTML=`<h3>${esc(p.formula)} ${badge(r.final)}</h3><p class="muted small">${esc(p.model)}${p.dataset?" · "+esc(p.dataset):""} · ${esc(p.ago)}</p><h4>What you entered</h4>${kv(inp)}<h4 style="margin-top:14px">Result</h4>${kv({["Predicted log10(k*) ("+UNITS.LOGK+")"]:r.pred_log,"Predicted k* (cm/s)":r.pred_k,"Mahalanobis distance":r.dist,"Applicability domain":r.ad_result,"Ehull check":r.ehull_result,"ORR check":r.orr_result,"Est. cost":r.cost==null?null:usd(r.cost),"Cost level":r.cost_result,"Final":r.final})}`;$("#modal").classList.remove("hidden")};
 window.predictProps=async()=>{
  const note=$("#propnote"),btn=$("#svrbtn"),values={};
  document.querySelectorAll("#pf_grid [data-f]").forEach(i=>{if(i.value.trim()!=="")values[i.dataset.f]=i.value});
@@ -857,7 +887,7 @@ window.predictProps=async()=>{
  try{
   const j=await api("/properties/predict",{json:{values}}),v=j.values;
   const put=(sel,x)=>{const i=document.querySelector(sel);if(!i)return;if(x==null||!isFinite(x)){return}i.value=+(+x).toPrecision(4);i.classList.add("calc");i.oninput=()=>i.classList.remove("calc")};
-  put('[data-f="Work_Function"]',v.Work_Function);put('[data-f="O_pband"]',v.O_pband);put('[data-f="Log_dieletric"]',v.Log_dieletric);put('[data-f="Oxide_vacancy"]',v.Oxide_vacancy);put('[data-f="Gap"]',v.Gap);
+  if(!PG.known){put('[data-f="Work_Function"]',v.Work_Function);put('[data-f="O_pband"]',v.O_pband);put('[data-f="Log_dieletric"]',v.Log_dieletric);put('[data-f="Oxide_vacancy"]',v.Oxide_vacancy);put('[data-f="Gap"]',v.Gap)}   /* dataset cathode: keep its own measured values */
   put('[data-x="σ_ion"]',v.Bulk_Ionic);put('[data-x="σ_total"]',v.Total_Electronic);put('[data-x="ASR"]',v.ASR);
   pgMark("other");
   note.textContent=(j.outside&&j.outside.length?`Inputs outside the training range: ${j.outside.join(", ")}. `:"")+(j.notes&&j.notes.length?j.notes.join(" "):"");

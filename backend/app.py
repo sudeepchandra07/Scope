@@ -8,7 +8,9 @@ from werkzeug.utils import secure_filename
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import ml
 import cost as costmod
+import units as un
 import screening as batch
+import report as rep
 
 BASE = Path(__file__).resolve().parent.parent
 # Data lives OUTSIDE the code folder (your home directory) so re-unzipping a new version never loses history.
@@ -292,7 +294,7 @@ def admin_model_details():
             x = X[f].astype(float).to_numpy(); ok = np.isfinite(x) & np.isfinite(y)
             if ok.sum() > 2 and np.std(x[ok]) > 0: r2 = float(np.corrcoef(x[ok], y[ok])[0, 1] ** 2)
         except Exception: pass
-        feats.append({"name": f, "label": labels.get(f, f), "r2": r2, "min": fl((stats.get(f) or {}).get("min")), "max": fl((stats.get(f) or {}).get("max"))})
+        feats.append({"name": f, "label": labels.get(f, f), "unit": un.unit(f), "r2": r2, "min": fl((stats.get(f) or {}).get("min")), "max": fl((stats.get(f) or {}).get("max"))})
     pred = pipe.predict(X)
     svr = pipe.steps[-1][1]; sc = meta.get("scores", {}).get("SVR", {})
     steps = [{"imp": "Median imputer (fills missing values)", "sc": "StandardScaler (zero mean, unit variance)"}.get(n, "SVR - RBF kernel, C=%g, epsilon=%g, gamma=%g" % (svr.C, svr.epsilon, svr.gamma)) if n != "m" else "SVR - RBF kernel, C=%g, epsilon=%g, gamma=%s" % (svr.C, svr.epsilon, svr.gamma) for n, _ in pipe.steps]
@@ -300,7 +302,7 @@ def admin_model_details():
             "test_r2": fl(sc.get("test_R2")), "cv_r2": fl(sc.get("cv_R2")), "mae": fl(sc.get("MAE"))}]
     pb = props_bundle()
     if pb:
-        for key, nm in (("E_above_hull", "Ehull (meV/atom)"), ("TEC", "TEC (x10^-6 K^-1)")):
+        for key, nm in (("E_above_hull", "Ehull (meV/atom)"), ("TEC", "TEC (x1e-6 1/K)")):
             t = pb["meta"]["targets"].get(key); pm = pb["b"].get(key)
             if not t or not pm: continue
             ps = t.get("params") or {}
@@ -713,6 +715,34 @@ def props_bundle():
         _PROPS.update(m=m, b=joblib.load(f), meta=json.loads((BUILTIN / "props_meta.json").read_text()))
     return _PROPS
 
+_KNOWN = {}
+def known_cathodes():
+    """known_cathodes.json (build_known_cathodes.py): every cathode of the training dataset with its own descriptors / properties, loaded once."""
+    f = BUILTIN / "known_cathodes.json"
+    if not f.exists(): return {}
+    m = f.stat().st_mtime
+    if _KNOWN.get("m") != m: _KNOWN.update(m=m, d=json.loads(f.read_text()).get("cathodes", {}))
+    return _KNOWN["d"]
+
+def known_match(composition, temp_c, tol=1.0):
+    """The cathode (same composition) AND the temperature (within +-1 deg C: the dataset's 1000/T values are rounded) are in the training dataset?
+    Returns {formula, values (15 descriptors + 5 properties), row {t, logk, ehull, tec}} or None -> the page then predicts as usual."""
+    import formula_desc as fd
+    try:
+        c = composition or {}; key = fd.comp_key({s: [(str(x[0]), float(x[1])) for x in (c.get(s) or [])] for s in ("A", "B")}); t = float(temp_c)
+    except Exception: return None
+    e = known_cathodes().get(key)
+    if not e or not np.isfinite(t): return None
+    r = min(e["rows"], key=lambda x: abs(x[0] - t))
+    if abs(r[0] - t) > tol: return None
+    return {"formula": e["formula"], "values": e["values"], "row": {"t": r[0], "logk": r[1], "ehull": r[2], "tec": r[3]}}
+
+@app.post("/api/known")
+@auth
+def known_lookup():
+    b = request.get_json(silent=True) or {}; m = known_match(b.get("composition"), b.get("temperature_c"))
+    return jsonify({"found": True, **m} if m else {"found": False})
+
 @app.post("/api/properties/predict")
 @auth
 def predict_properties():
@@ -773,6 +803,8 @@ def do_predict(r, shared=False):
         if miss:
             if "1000/T" in miss: return err("Enter the temperature (°C) - it is converted to 1000/T and used as a model input.")
             return err("All inputs are needed. Missing: " + ", ".join(miss) + ". Press 'Fill with descriptors' and 'Predict using SVR' (or type the values).")
+        hit = known_match(b.get("composition"), 1000.0 / clean["1000/T"] - 273.15) if clean.get("1000/T") else None
+        if hit: clean.update(hit["values"])                  # cathode + temperature are in the dataset: use its own descriptors / properties
         for key in ("E_above_hull", "TEC"):
             e = pb["b"][key]; extra[key] = float(e["model"].predict(np.array([[clean[k] for k in e["features"]]], dtype=float))[0]); clean[key] = extra[key]
         b["ehull"] = extra["E_above_hull"]
@@ -788,6 +820,14 @@ def do_predict(r, shared=False):
             x["tec_result"] = "PASS" if extra["TEC"] <= ml.TEC_LIMIT else "FAIL"; x["detail"]["thresholds"]["tec"] = ml.TEC_LIMIT
             if x["tec_result"] == "FAIL":
                 x["detail"]["fails"].append(f"TEC {extra['TEC']:.2f} x10^-6 1/K exceeds the {ml.TEC_LIMIT:g} x10^-6 1/K limit."); x["final"] = "FAIL"
+        if full and hit:   # reproduce the dataset's recorded values for this cathode at this temperature, then re-judge them with the same limits
+            rw = hit["row"]; th = x["detail"]["thresholds"]; fl = []
+            x["pred_log"], x["pred_k"], x["ehull"] = rw["logk"], float(10 ** rw["logk"]), rw["ehull"]; extra["TEC"] = rw["tec"]; clean["E_above_hull"], clean["TEC"] = rw["ehull"], rw["tec"]; eh = rw["ehull"]
+            x["tec_result"] = "PASS" if rw["tec"] <= ml.TEC_LIMIT else "FAIL"; x["ehull_result"] = "PASS" if rw["ehull"] <= th["ehull"] else "FAIL"; x["orr_result"] = "PASS" if rw["logk"] >= th["orr"] else "FAIL"
+            if x["tec_result"] == "FAIL": fl.append(f"TEC {rw['tec']:.2f} x10^-6 1/K exceeds the {ml.TEC_LIMIT:g} x10^-6 1/K limit.")
+            if x["ehull_result"] == "FAIL": fl.append(f"Ehull {rw['ehull']:.1f} meV/atom exceeds the {th['ehull']:g} meV/atom limit (LSC value).")
+            if x["orr_result"] == "FAIL": fl.append(f"ORR activity criterion not satisfied: log10(k*) {rw['logk']:.2f} < benchmark {th['orr']:.2f} (log10 of k* in cm/s; LSC benchmark used in the research paper).")
+            x["detail"]["fails"], x["detail"]["not_available"], x["final"] = fl, [], "FAIL" if fl else "PASS"
         cmp_ = ml.compare_with_training(bundle, clean)
         if shared: cmp_["nearest"] = []                      # never show another user's training cathodes
         sm = json.loads(r["summary_json"] or "{}") if r["status"] == "screened" and not shared else {}
@@ -815,10 +855,11 @@ def do_predict(r, shared=False):
                     "final": x["final"], "fails": d["fails"],
                     "not_available": d["not_available"], "thresholds": d["thresholds"], "imputed": x["imputed"], "drivers": drv, "compare": cmp_,
                     "model": {"name": model, "trained_on": len(bundle.get("train_index", [])), "n_features": len(bundle["features"])},
-                    "full": full, "tec": extra.get("TEC"), "tec_result": x.get("tec_result"), "ehull_predicted": full,
+                    "full": full, "dataset_match": ({"formula": hit["formula"], "temperature_c": hit["row"]["t"]} if full and hit else None), "tec": extra.get("TEC"), "tec_result": x.get("tec_result"), "ehull_predicted": full,
                     "prop_scores": {k: v["cv_R2"] for k, v in (props_bundle() or {"meta": {"targets": {}}})["meta"]["targets"].items() if k in ("E_above_hull", "TEC")} if full else {}}
-    db().execute("INSERT INTO predictions(user_id,roll,dataset_id,dataset_name,model,formula,inputs_json,result_json,created_at,full_json) VALUES(?,?,?,?,?,?,?,?,?,?)",
+    cur = db().execute("INSERT INTO predictions(user_id,roll,dataset_id,dataset_name,model,formula,inputs_json,result_json,created_at,full_json) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (g.uid, g.roll, did, "Built-in models" if shared else r["filename"], model, x["formula"], jd(inp), jd({"pred_log": x["pred_log"], "pred_k": x["pred_k"], "dist": x["dist"], "ad_result": x["ad_result"], "ehull_result": x["ehull_result"], "orr_result": x["orr_result"], "cost": x["cost"], "cost_result": x["cost_result"], "final": x["final"]}), now(), jd(resp))); db().commit()
+    resp["pid"] = cur.lastrowid                                              # lets the result page open the report / .cif of this very prediction
     log("prediction", f"{x['formula']} · {model} · {x['final']}")
     return jsonify(resp)
 
@@ -870,7 +911,7 @@ def best_in_category(rows):
         return {**base, "available": True, "winner": card(w), "ties": [t["formula"] for t in tied[1:]], "n_compared": len(have), "reason": txt}
     out = [pick("stable", "Most stable", "Ehull", "ehull", False, lambda v: f"{v:.4g} meV/atom"),
            pick("cheapest", "Lowest cost", "estimated cost", "cost", False, lambda v: f"{v:.4g} USD/kg (estimate)"),
-           pick("active", "Most active", "predicted log10(k*)", "predicted_log_kstar", True, lambda v: f"{v:.4g}")]
+           pick("active", "Most active", "predicted log10(k*)", "predicted_log_kstar", True, lambda v: f"{v:.4g} log10(cm/s)")]
     base = {"key": "balanced", "title": "Most balanced", "criterion": "rank-sum of Ehull, cost and log10(k*)"}
     crits = [(lab, col, hi) for lab, col, hi in (("Ehull", "ehull", False), ("cost", "cost", False), ("log10(k*)", "predicted_log_kstar", True)) if n and all(r.get(col) is not None for r in rows)]
     if not n: out.append({**base, "available": False, "note": "No cathode has a full PASS, so there is nothing to choose from."})
@@ -918,6 +959,89 @@ def result_one(did, rid):
     refresh_old(own(did)); x = db().execute("SELECT * FROM screening_results WHERE id=? AND dataset_id=?", (rid, did)).fetchone()
     if not x: return err("Cathode not found.", 404)
     d = dict(x); d["detail"] = json.loads(d.pop("detail_json")); return jsonify(d)
+
+def _result_row(did, rid):
+    """One stored screening row with its detail parsed, or None."""
+    refresh_old(own(did)); x = db().execute("SELECT * FROM screening_results WHERE id=? AND dataset_id=?", (rid, did)).fetchone()
+    if not x: return None
+    d = dict(x); d["detail"] = json.loads(d.pop("detail_json")); return d
+
+@app.get("/api/datasets/<int:did>/results/<int:rid>/cif")
+@auth
+def result_cif(did, rid):
+    """The .cif file (estimated cubic-perovskite cell) of any cathode of the screening, PASS or FAIL."""
+    d = _result_row(did, rid)
+    if not d: return err("Cathode not found.", 404)
+    f = d["detail"].get("features") or {}
+    try:
+        comp, ox, canon = rep.formula_parts(d["formula"]); cl = rep.cell(comp, ox, f.get("R_A"), f.get("R_B"))
+    except ValueError as e: return err(str(e), 422)
+    name = re.sub(r"[^\w.-]", "_", canon or d["formula"]) + ".cif"
+    return jsonify({"filename": name, "formula": canon or d["formula"], "cif": rep.cif_text(canon or d["formula"], comp, ox, cl),
+                    "cell": {k: cl[k] for k in ("a", "volume", "density", "spacegroup")}})
+
+@app.get("/api/datasets/<int:did>/results/<int:rid>/report")
+@auth
+def result_report(did, rid):
+    """Everything the SCOPE PASS / FAIL report of one cathode shows (see report.py); the page itself is drawn by the browser."""
+    d = _result_row(did, rid)
+    if not d: return err("Cathode not found.", 404)
+    if (d["detail"].get("thresholds") or {}).get("tec") is None: return err("Reports are available for screenings made with the temperature + Screen flow. Screen this dataset again to get one.", 422)
+    bundle = load_bundle(0); pb = props_bundle()
+    if bundle is None or pb is None: return err("The built-in models are missing, so the report cannot be built.", 500)
+    try: out = rep.build(d, did, bundle, pb["b"], get_table())
+    except ValueError as e: return err(str(e), 422)
+    log("report", f"{d['formula']} · {d['final_result']}"); return jsonify(out)
+
+def _pred_row(pid):
+    """A single-cathode prediction (this user's own) rebuilt as the same row/detail structure a batch screening stores, so report.py and the .cif builder can be reused."""
+    r = db().execute("SELECT * FROM predictions WHERE id=? AND user_id=?", (pid, g.uid)).fetchone()
+    if not r: return None, "Prediction not found."
+    full = json.loads(r["full_json"]) if r["full_json"] else None
+    if not full or (full.get("thresholds") or {}).get("tec") is None:
+        return None, "A report is only available for predictions made with the full 23-input Predict flow. Predict this cathode again to get one."
+    inp = json.loads(r["inputs_json"] or "{}"); feats = {}
+    for k, v in inp.items():
+        try:
+            fv = float(v)
+            if np.isfinite(fv): feats[k] = fv
+        except (TypeError, ValueError): pass
+    temp = (1000.0 / feats["1000/T"] - 273.15) if feats.get("1000/T") else None
+    row = {"id": r["id"], "rank": None, "formula": full["formula"], "final_result": full["final"], "ehull": full.get("ehull"), "tec": full.get("tec"),
+           "orr_value": full.get("pred_log"), "predicted_log_kstar": full.get("pred_log"), "ehull_result": full.get("ehull_result"), "tec_result": full.get("tec_result"),
+           "orr_result": full.get("orr_result"), "mahalanobis_distance": full.get("dist"), "applicability_domain": full.get("ad"), "cost": full.get("cost"), "cost_result": full.get("cost_result"),
+           "detail": {"features": feats, "thresholds": full["thresholds"], "temperature_c": temp, "sources": {}, "notes": [], "cost": full.get("cost_info") or {}, "not_available": full.get("not_available") or []}}
+    return row, None
+
+@app.get("/api/predictions/<int:pid>/cif")
+@auth
+def prediction_cif(pid):
+    """The .cif file (estimated cubic-perovskite cell) of a single-cathode prediction, PASS or FAIL."""
+    row, e = _pred_row(pid)
+    if row is None:
+        r = db().execute("SELECT formula,inputs_json FROM predictions WHERE id=? AND user_id=?", (pid, g.uid)).fetchone()     # older predictions: the cell only needs the formula (radii fall back to defaults)
+        if not r: return err(e, 404)
+        row = {"formula": r["formula"], "detail": {"features": {k: v for k, v in json.loads(r["inputs_json"] or "{}").items() if isinstance(v, (int, float))}}}
+    f = row["detail"].get("features") or {}
+    try:
+        comp, ox, canon = rep.formula_parts(row["formula"]); cl = rep.cell(comp, ox, f.get("R_A"), f.get("R_B"))
+    except ValueError as ex: return err(str(ex), 422)
+    name = re.sub(r"[^\w.-]", "_", canon or row["formula"]) + ".cif"
+    return jsonify({"filename": name, "formula": canon or row["formula"], "cif": rep.cif_text(canon or row["formula"], comp, ox, cl),
+                    "cell": {k: cl[k] for k in ("a", "volume", "density", "spacegroup")}})
+
+@app.get("/api/predictions/<int:pid>/report")
+@auth
+def prediction_report(pid):
+    """The same PASS / FAIL report as the screening page, for one single-cathode prediction."""
+    row, e = _pred_row(pid)
+    if row is None: return err(e, 404 if e == "Prediction not found." else 422)
+    bundle = load_bundle(0); pb = props_bundle()
+    if bundle is None or pb is None: return err("The built-in models are missing, so the report cannot be built.", 500)
+    try: out = rep.build(row, 0, bundle, pb["b"], get_table())
+    except ValueError as ex: return err(str(ex), 422)
+    out["id"] = f"SCOPE-P{pid}"
+    log("report", f"{row['formula']} · {row['final_result']} · single prediction"); return jsonify(out)
 
 @app.get("/api/my-predictions")
 @auth
@@ -970,16 +1094,16 @@ def export(did, kind):
                     "Precursor needed (g per mol cathode)": p["mass_g"], "Cost (USD per mol cathode)": p["cost"], "Share of cost (%)": round(100 * p["share"], 2),
                     "Price source": p["source"]} for p in ci.get("parts", [])]
         if is_batch:
-            screen_cols = {"Temperature (°C)": smy.get("temperature_c"), "Predicted TEC (x1e-6 1/K)": x["tec"], "TEC result (<= 15)": x["tec_result"],
-                           "Predicted log10(k*)": x["predicted_log_kstar"], "Predicted k* (cm/s)": x["predicted_kstar"], "log10(k*) result (>= -6.40, LSC benchmark)": x["orr_result"],
-                           "Predicted Ehull (meV/atom)": x["ehull"], "Ehull result (<= 57)": x["ehull_result"],
+            screen_cols = {"Temperature (°C)": smy.get("temperature_c"), "Predicted TEC (x1e-6 1/K)": x["tec"], "TEC result (<= 15 x1e-6 1/K)": x["tec_result"],
+                           "Predicted log10(k*) (log10 of cm/s)": x["predicted_log_kstar"], "Predicted k* (cm/s)": x["predicted_kstar"], "log10(k*) result (>= -6.40 log10(cm/s), LSC benchmark)": x["orr_result"],
+                           "Predicted Ehull (meV/atom)": x["ehull"], "Ehull result (<= 57 meV/atom)": x["ehull_result"],
                            "Applicability domain (info only)": x["applicability_domain"], "Mahalanobis distance (info only)": x["mahalanobis_distance"]}
-            screen_cols.update({f"Input: {k}": v for k, v in (det.get("features") or {}).items()})
+            screen_cols.update({f"Input: {un.with_unit(k)}": v for k, v in (det.get("features") or {}).items()})
             screen_cols.update({f"Source of {k}": v for k, v in (det.get("sources") or {}).items()})
         else:
-            screen_cols = {"Predicted log10(k*)": x["predicted_log_kstar"], "Predicted k* (cm/s)": x["predicted_kstar"], "Mahalanobis distance": x["mahalanobis_distance"],
+            screen_cols = {"Predicted log10(k*) (log10 of cm/s)": x["predicted_log_kstar"], "Predicted k* (cm/s)": x["predicted_kstar"], "Mahalanobis distance": x["mahalanobis_distance"],
                            "Applicability domain": x["applicability_domain"], "Ehull (meV/atom)": x["ehull"], "Ehull result": x["ehull_result"],
-                           "ORR activity (pred. log10 k*)": x["orr_value"], "ORR result (LSC benchmark -6.40)": x["orr_result"]}
+                           "ORR activity (pred. log10 k*, log10 of cm/s)": x["orr_value"], "ORR result (LSC benchmark -6.40 log10(cm/s))": x["orr_result"]}
         recs.append({"Rank": x["rank"], "Closeness tier": TN[x["tier"]], **det["original"], **screen_cols,
             "Estimated precursor cost (USD per kg of cathode)": x["cost"], "Cost level (Cheap / Moderate / Expensive)": x["cost_result"], "Cost rank among priced cathodes (1 = cheapest)": ci.get("rank"),
             "Cost: elements without a price": ", ".join(ci.get("missing") or []), "Final result": x["final_result"], "Failure reason / note": x["failure_reason"]})
@@ -988,7 +1112,7 @@ def export(did, kind):
         if cat.get("available"): won.setdefault(cat["winner"]["id"], []).append(cat["title"])
     for x_, rec in zip(rows, recs): rec["Best in category (among PASS)"] = ", ".join(won.get(x_["id"], []))
     brecs = [{"Category": c["title"], "Criterion": c["criterion"], "Cathode / formula": c["winner"]["formula"], "Ehull (meV/atom)": c["winner"]["ehull"],
-              "Estimated cost (USD/kg)": c["winner"]["cost"], "Predicted log10(k*)": c["winner"]["log_k"], "Predicted k* (cm/s)": c["winner"]["k"],
+              "Estimated cost (USD/kg)": c["winner"]["cost"], "Predicted log10(k*) (log10 of cm/s)": c["winner"]["log_k"], "Predicted k* (cm/s)": c["winner"]["k"],
               "Rank-sum (balanced only)": c["winner"].get("rank_sum"), "Tied with": ", ".join(c["ties"]), "Why": c["reason"]} if c.get("available") else
              {"Category": c["title"], "Criterion": c["criterion"], "Cathode / formula": "— skipped —", "Why": c["note"]} for c in bst["categories"]]
     bsheet = ("Best in Category", pd.DataFrame(brecs))
@@ -1014,12 +1138,13 @@ def export(did, kind):
                     f = GREEN_FILL if str(ws.cell(rr, ti).value).startswith("GREEN") else RED_FILL
                     for cc in range(1, ws.max_column + 1): ws.cell(rr, cc).fill = PatternFill("solid", fgColor=f)
         pd.DataFrame({"Note": ["Rows are sorted by Rank (closest to passing first). Closeness = mean normalised shortfall over the evaluated criteria (applicability domain, Ehull, ORR); GREEN <= 0.10, RED > 0.50, INTERMEDIATE in between. In the coloured sheets, GREEN-tier rows are shaded soft green and all other rows soft red. This ranking is an addition to, not part of, the paper's PASS/FAIL rules.",
-            ("PASS = predicted TEC <= 15 x1e-6 1/K, predicted log10(k*) >= -6.40 (the LSC benchmark used in the research paper) and predicted Ehull <= 57 meV/atom. Every cathode was screened at "
+            ("PASS = predicted TEC <= 15 x1e-6 1/K, predicted log10(k*) >= -6.40 (log10 of k* in cm/s; the LSC benchmark used in the research paper) and predicted Ehull <= 57 meV/atom. Every cathode was screened at "
              f"{smy.get('temperature_c'):g} °C with the Predict-Single-Cathode logic: descriptors from the dataset where it has them, otherwise calculated from the formula; material properties from the dataset or predicted by SVR; TEC, Ehull and log10(k*) predicted by the built-in SVR models. "
              "Applicability domain and cost are shown for information only and do not affect PASS / FAIL. NOT EVALUABLE = the formula was not recognised or descriptor data for an element is missing.") if is_batch else
-            "PASS = inside the applicability domain, Ehull <= 57 meV/atom, predicted log10(k*) >= -6.40 (the LSC benchmark used in the research paper). Cost is NOT part of PASS / FAIL.",
+            "PASS = inside the applicability domain, Ehull <= 57 meV/atom, predicted log10(k*) >= -6.40 (log10 of k* in cm/s; the LSC benchmark used in the research paper). Cost is NOT part of PASS / FAIL.",
             "Estimated cost = precursor cost per kg of cathode (USD/kg): the formula gives the moles of each precursor (e.g. La2O3, SrCO3, MnO2) per mole of cathode, plus a small excess for volatile elements (Li, Na, K, Bi, Pb), converted to grams and multiplied by the price per kg (normalised to 99% purity); the total is divided by the theoretical mass of one mole of cathode times the synthesis yield. Prices are built-in approximate market estimates (not live quotes) unless an administrator overrides them. Cheap / Moderate / Expensive = the cheapest third / middle third / dearest third of the cathodes in this screening. If an element has no price the cost is NOT AVAILABLE (never guessed). It is an indication for comparing cathodes, not a quotation.",
             "Best in category (sheet 'Best in Category' and the column of the same name): chosen only among the PASS cathodes, using only values in this file. Most stable = lowest Ehull; Lowest cost = lowest estimated cost; Most active = highest predicted log10(k*); " + BEST_RANKSUM_TEXT + " Ties are listed; a category is skipped when its criterion is not available.",
+            "Units: log10(k*) is the base-10 logarithm of k* in cm/s; TEC in x1e-6 1/K; Ehull in meV/atom; temperature in °C; 1000/T in x1e3 1/K; estimated cost in USD/kg of cathode; ionization energies, band gap, work function, O p-band centre and O-vacancy energy in eV; ionic radii in Å; Sa in valence units (v.u.); the d-electron count in electrons; the remaining descriptors (electronegativity, tolerance factor, ionicity indices, Smith acidity, log dielectric constant) and the Mahalanobis distance are dimensionless and have no unit. Each input column in this file carries its unit in brackets.",
             ("Predictions come from the built-in SVR models; treat them as screening indicators, not validated measurements." if is_batch else
              f"Predictions come from the {screened_model(r)} model trained on this same dataset (in-sample); treat them as screening indicators, not validated measurements.")]}).to_excel(w, sheet_name="Notes", index=False)
         w.sheets["Notes"].column_dimensions["A"].width = 120
