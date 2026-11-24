@@ -52,6 +52,12 @@ def get_table():
 
 app = Flask(__name__, static_folder=str(BASE / "frontend"), static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "https://scope-pr.vercel.app"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    return response
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, roll_number TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT);
