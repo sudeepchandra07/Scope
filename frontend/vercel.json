@@ -1,12 +1,9 @@
+
 {
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://scope.tail6c9c46.ts.net/api/:path*"
-    },
-    {
-      "source": "/admin",
-      "destination": "/admin.html"
+      "destination": "https://scope-np28.onrender.com/api/:path*"
     }
   ]
 }
