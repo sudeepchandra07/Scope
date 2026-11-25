@@ -1,9 +1,12 @@
-
 {
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://scope-np28.onrender.com/api/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
     }
   ]
 }
