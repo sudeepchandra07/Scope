@@ -18,8 +18,10 @@
     return d < 0.045 ? best : 1;
   }
 
+  var MOBILE_MAX = 820;                                       /* phones / small tablets: no 80% shrink, use the real size */
+
   function apply() {
-    var z = TARGET / browserZoom();                           /* 100% -> 0.8 ; 80% -> 1.0 */
+    var z = window.innerWidth <= MOBILE_MAX ? 1 : TARGET / browserZoom();   /* 100% -> 0.8 ; 80% -> 1.0 ; mobile -> 1 */
     window.__zf = z;
     de.style.zoom = z === 1 ? '' : String(z);
     de.style.setProperty('--zf', z);

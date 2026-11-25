@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="zoomfix.js"></script><title>SCOPE · Admin Dashboard</title><link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=2"><link rel="shortcut icon" href="/favicon.ico?v=2"><link rel="apple-touch-icon" href="/logo.png?v=2">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="zoomfix.js?v=1795600001"></script><title>SCOPE · Admin Dashboard</title><link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=2"><link rel="shortcut icon" href="/favicon.ico?v=2"><link rel="apple-touch-icon" href="/logo.png?v=2">
 <style>
 :root{--navy:#0f2a43;--navy2:#16385a;--ink:#1b2a38;--teal:#0f8b8d;--teal-d:#0b6e70;--blue:#1d5a85;--mut:#64748b;--line:rgba(15,42,67,.09);--ok:#16a34a;--bad:#dc2626;--warn:#d97706;
 --glass:rgba(255,255,255,.66);--sh:0 10px 34px rgba(15,42,67,.09),inset 0 1px 0 rgba(255,255,255,.95)}
@@ -82,6 +82,39 @@ body{background:linear-gradient(180deg,#f3f8fe 0%,#e8f1fc 55%,#e1ecfa 100%)}
 .glass{background:rgba(255,255,255,.80);border:1px solid rgba(255,255,255,.9);box-shadow:0 10px 34px rgba(30,80,160,.10),inset 0 1px 0 #fff;-webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%)}
 header{-webkit-backdrop-filter:none;backdrop-filter:none}
 
+
+/* ===== mobile responsive layer (phones only; desktop untouched) ===== */
+html,body{max-width:100%}
+@media(max-width:1000px){
+ .ov{grid-template-columns:minmax(0,1fr)}
+ .cards{grid-template-columns:minmax(0,1fr)}
+ header{row-gap:8px}
+ nav button{padding:10px 18px;font-size:14.5px}
+ .out{padding:9px 18px;font-size:14px}
+}
+@media(max-width:700px){
+ input,select{font-size:16px}
+ .out{margin-left:auto}
+ nav button{padding:9px 14px;font-size:14px;gap:6px}
+ nav button svg{width:17px;height:17px}
+ .pt h2{font-size:21px}
+ .panel{padding:16px 14px}
+ .st{padding:16px 16px;gap:14px}
+ .bh{gap:8px}
+ .bh h3{flex:1 1 100%}
+ .bh select,.bh input{flex:1 1 140px}
+ input[type=search],input[data-f=q]{min-width:0;width:100%}
+ th,td{padding:10px 12px}
+ .cm{gap:14px;flex-wrap:wrap}
+ .dh{padding:18px 16px 12px}.df{padding:12px 16px 4px}.dl{padding:6px 16px}.dp{padding:10px 16px}
+ #drw{width:100%}
+ #toasts{top:70px;left:12px;right:12px}.ts{max-width:none}
+ .empty{padding:30px 16px}
+}
+@media(max-width:380px){
+ .brand b{font-size:15px}
+ nav button{padding:8px 11px;font-size:13px}
+}
 </style></head><body>
 <header><div class="brand"><div class="lg"><img src="/logo.png?v=2" alt="SCOPE logo" width="40" height="40"></div><div><b>SCOPE</b><small>ADMIN CONSOLE</small></div></div><nav id="nav"></nav><span class="sp"></span>
 <span class="live"><span class="dot" id="dot"></span><span id="lt">Connecting…</span></span><button class="out" id="out">Log out</button></header>
@@ -227,7 +260,7 @@ function nav(){$("nav").innerHTML=TABS.map(([k,l,i])=>`<button data-t="${k}" cla
  $("nav").querySelectorAll("button").forEach(b=>b.onclick=()=>{TAB=b.dataset.t;reset();BUILT="";$("main")._h=null;nav();render();scrollTo(0,0)})}
 function toast(a){const m=msg(a),t=document.createElement("div");t.className="ts";t.innerHTML=`<div class="${fic(a)}">${svg(a.type)}</div><div>${m.h}</div>`;$("toasts").appendChild(t);setTimeout(()=>t.classList.add("o"),4200);setTimeout(()=>t.remove(),4700)}
 async function poll(){if(busy)return;busy=true;const dot=$("dot"),lt=$("lt");
- try{const r=await fetch("https://scope-np28.onrender.com/api/admin/snapshot",AH);if(r.status===401||r.status===403){ss.removeItem("pcs_admin_token");TK=null;return showAdminLogin()}if(!r.ok)throw 0;
+ try{const r=await fetch("/api/admin/snapshot",AH);if(r.status===401||r.status===403){ss.removeItem("pcs_admin_token");TK=null;return showAdminLogin()}if(!r.ok)throw 0;
   D=await r.json();const top=D.activity.length?D.activity[0].id:0;
   if(SEEN!==null)D.activity.filter(a=>a.id>SEEN).reverse().slice(-3).forEach(toast);
   dot.classList.remove("off");lt.textContent="Live · "+D.server_time.slice(11);render();SEEN=top;if(DR)loadUser()}

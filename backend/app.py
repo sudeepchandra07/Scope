@@ -24,13 +24,8 @@ DB = STORE / "app.db"; KEYFILE = STORE / "secret.key"
 if not KEYFILE.exists(): KEYFILE.write_text(secrets.token_hex(32))
 SER = URLSafeTimedSerializer(os.environ.get("SECRET_KEY", KEYFILE.read_text()))
 import hmac
-# Admin credentials are supplied through environment variables.
-ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-if not ADMIN_USER or not ADMIN_PASSWORD:
-    raise RuntimeError("Set ADMIN_USER and ADMIN_PASSWORD environment variables before starting SCOPE.")
-ADMIN_HASH = generate_password_hash(ADMIN_PASSWORD)
-del ADMIN_PASSWORD
+ADMIN_USER = "admin@123"                       # fixed admin login (kept in code, NOT in the database, so a data reset never removes it)
+ADMIN_HASH = generate_password_hash("CRYSTAL")
 USER_RE = re.compile(r"[A-Za-z0-9._@-]{3,30}")      # custom usernames: 3-30 letters / digits / . _ @ -
 ALLOWED = {".csv", ".xlsx", ".xls"}; SUMMARY_VER = 5
 
@@ -52,12 +47,6 @@ def get_table():
 
 app = Flask(__name__, static_folder=str(BASE / "frontend"), static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
-@app.after_request
-def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://scope-pr.vercel.app"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    return response
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, roll_number TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT);

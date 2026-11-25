@@ -16,7 +16,7 @@ const lvl={CHEAP:"Cheap",MODERATE:"Moderate",EXPENSIVE:"Expensive"};
 const usd=v=>v==null?"—":"$"+(v>=100?Math.round(v).toLocaleString():v>=10?v.toFixed(1):v.toFixed(2))+"/kg";
 const toast=m=>{const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",4000)};
 async function api(p,o={}){o.headers={...(o.headers||{}),Authorization:"Bearer "+S.token};if(o.json){o.headers["Content-Type"]="application/json";o.body=JSON.stringify(o.json);o.method=o.method||"POST"}
- let r;try{r=await fetch("https://scope-np28.onrender.com/api"+p,o)}catch(e){throw new Error("Cannot reach the server (API failure). Is the backend still running?")}
+ let r;try{r=await fetch("/api"+p,o)}catch(e){throw new Error("Cannot reach the server (API failure). Is the backend still running?")}
  if(r.status===401&&p!=="/login"&&p!=="/admin/login"){logout();throw new Error("Session expired – please log in again.")}
  if(!(r.headers.get("content-type")||"").includes("json"))return r;const j=await r.json();if(!r.ok)throw new Error(j.error||"Request failed");return j}
 async function busy(msgs,fn){const b=$("#busy");b.classList.remove("hidden");let i=0;$("#busymsg").textContent=msgs[0];const t=setInterval(()=>$("#busymsg").textContent=msgs[Math.min(++i,msgs.length-1)],1800);
